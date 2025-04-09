@@ -13,6 +13,7 @@ export default defineConfig(() => {
         process: 'process/browser',
         buffer: 'buffer',
       },
+      extensions: ['.ts', '.tsx', '.js', '.jsx'], // ← optional, aber klar
     },
     define: {
       global: 'globalThis',
