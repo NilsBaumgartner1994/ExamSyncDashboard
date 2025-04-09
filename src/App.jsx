@@ -1,11 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Peer from 'peerjs';
+import {
+    AppShell, Button, Container, Group, Input, Stack, Text, TextInput, Title,
+    Paper, ScrollArea, Badge, Card, SimpleGrid
+} from '@mantine/core';
+import { useNotifications, showNotification } from '@mantine/notifications';
+
+function useEffectOnce(effect) {
+    useEffect(effect, []);
+}
+
 
 export default function App() {
     const [nickname, setNickname] = useState('Anonym');
     const [joined, setJoined] = useState(false);
     const [room, setRoom] = useState('');
-    const [showChat, setShowChat] = useState(false);
     const [examEndTime, setExamEndTime] = useState(null);
     const [toiletOccupied, setToiletOccupied] = useState(false);
     const [messages, setMessages] = useState([]);
@@ -14,17 +23,23 @@ export default function App() {
     const [peers, setPeers] = useState([]);
     const [durationInput, setDurationInput] = useState('');
     const [connected, setConnected] = useState(false);
-    const [log, setLog] = useState([]);
+    const [tiles, setTiles] = useState([]);
+    const [tileInput, setTileInput] = useState('');
 
     const peerRef = useRef();
     const connRef = useRef();
 
+    useEffectOnce(() => {
+        const params = new URLSearchParams(window.location.search);
+        const idFromUrl = params.get('roomId');
+        if (idFromUrl) {
+            setRoom(idFromUrl);
+        }
+    });
+
     const safeSend = (data) => {
         if (connRef.current && connRef.current.open) {
             connRef.current.send(JSON.stringify(data));
-            setLog(log => [...log, `Gesendet: ${JSON.stringify(data)}`]);
-        } else {
-            setLog(log => [...log, `Nicht gesendet (nicht verbunden): ${JSON.stringify(data)}`]);
         }
     };
 
@@ -32,6 +47,7 @@ export default function App() {
         safeSend({ type: 'nickname', data: nickname });
         safeSend({ type: 'examEndTime', data: examEndTime });
         safeSend({ type: 'toiletOccupied', data: toiletOccupied });
+        safeSend({ type: 'tiles', data: tiles });
     };
 
     const connectToRoom = () => {
@@ -39,19 +55,27 @@ export default function App() {
         peerRef.current = peer;
 
         peer.on('open', (id) => {
-            setLog(log => [...log, `Peer geöffnet mit ID ${id}`]);
-            if (room === id) return; // verhindert Selbstverbindung
+            if (!room) {
+                setRoom(id);
+                setJoined(true);
+                showNotification({
+                    title: 'Neuer Raum erstellt',
+                    message: `Raum-ID: ${id}`,
+                    color: 'green'
+                });
+            } else {
+                const conn = peer.connect(room);
+                connRef.current = conn;
+                conn.on('open', () => {
+                    setConnected(true);
+                    broadcastPresence();
+                });
+                conn.on('data', handleIncoming);
+                setJoined(true);
+            }
 
-            const conn = peer.connect(room);
-            connRef.current = conn;
-
-            conn.on('open', () => {
-                setConnected(true);
-                broadcastPresence();
-                setLog(log => [...log, 'Verbindung zu anderem Peer geöffnet.']);
-            });
-
-            conn.on('data', handleIncoming);
+            // Entferne roomId aus URL
+            window.history.replaceState({}, document.title, window.location.pathname);
         });
 
         peer.on('connection', (conn) => {
@@ -59,16 +83,13 @@ export default function App() {
             conn.on('open', () => {
                 setConnected(true);
                 broadcastPresence();
-                setLog(log => [...log, 'Eingehende Verbindung akzeptiert.']);
             });
-
             conn.on('data', handleIncoming);
         });
     };
 
     const handleIncoming = (data) => {
         const msg = JSON.parse(data);
-        setLog(log => [...log, 'Empfangen: ' + JSON.stringify(msg)]);
         if (msg.type === 'chat') {
             setMessages(prev => [...prev, msg.data]);
         } else if (msg.type === 'examEndTime') {
@@ -77,6 +98,8 @@ export default function App() {
             setToiletOccupied(msg.data);
         } else if (msg.type === 'nickname') {
             setPeers(prev => [...new Set([...prev, msg.data, nickname])]);
+        } else if (msg.type === 'tiles') {
+            setTiles(msg.data);
         }
     };
 
@@ -93,8 +116,7 @@ export default function App() {
     const handleSend = () => {
         if (messageInput.trim()) {
             const chatMessage = { user: nickname, text: messageInput };
-            const msg = { type: 'chat', data: chatMessage };
-            safeSend(msg);
+            safeSend({ type: 'chat', data: chatMessage });
             setMessages(prev => [...prev, chatMessage]);
             setMessageInput('');
         }
@@ -115,95 +137,103 @@ export default function App() {
         safeSend({ type: 'toiletOccupied', data: newStatus });
     };
 
-    const renderDashboard = () => (
-        <div className="p-4">
-            <h1 className="text-2xl font-bold mb-4">Dashboard</h1>
-            <p>Status: <strong>{connected ? 'Verbunden ✅' : 'Nicht verbunden ⏳'}</strong></p>
-            <p>Nickname: <strong>{nickname}</strong></p>
-            <p>Raum: <strong>{room}</strong></p>
-            <p>Teilnehmer im Raum: {peers.join(', ')}</p>
-            <p>Toilette: {toiletOccupied ? 'Besetzt' : 'Frei'}</p>
-            <button onClick={toggleToilet} className="mt-2 bg-yellow-500 text-white px-4 py-1 rounded">
-                Toilette umschalten
-            </button>
-
-            <div className="mt-4">
-                <label className="block mb-2">Klausur-Dauer (Minuten):</label>
-                <input
-                    type="number"
-                    value={durationInput}
-                    onChange={(e) => setDurationInput(e.target.value)}
-                    className="border p-1 mr-2"
-                />
-                <button onClick={handleSetDuration} className="bg-purple-600 text-white px-4 py-1 rounded">
-                    Setzen
-                </button>
-            </div>
-
-            <p className="mt-2">
-                Restzeit der Klausur: {
-                timeLeft !== null
-                    ? `${Math.floor(timeLeft / 3600000)}h ${Math.floor((timeLeft % 3600000) / 60000)}m ${Math.floor((timeLeft % 60000) / 1000)}s`
-                    : 'nicht gesetzt'
-            }
-            </p>
-
-            <button onClick={() => setShowChat(!showChat)} className="mt-4 bg-blue-500 text-white px-4 py-2 rounded">
-                {showChat ? 'Chat ausblenden' : 'Chat einblenden'}
-            </button>
-
-            {showChat && (
-                <div className="mt-4 border-t pt-4">
-                    <h2 className="text-xl font-semibold">Dozenten-Chat</h2>
-                    <div className="border h-40 overflow-y-scroll p-2 bg-gray-100">
-                        {messages.map((msg, i) => (
-                            <div key={i}><strong>{msg.user}:</strong> {msg.text}</div>
-                        ))}
-                    </div>
-                    <input
-                        className="border w-full mt-2 p-1"
-                        value={messageInput}
-                        onChange={(e) => setMessageInput(e.target.value)}
-                        placeholder="Nachricht eingeben"
-                    />
-                    <button onClick={handleSend} className="mt-2 bg-green-500 text-white px-4 py-1 rounded">Senden</button>
-                </div>
-            )}
-
-            <div className="mt-4 border-t pt-4 text-sm text-gray-500">
-                <h2 className="text-md font-semibold">Verbindungsprotokoll</h2>
-                <div className="border h-40 overflow-y-scroll p-2 bg-gray-100 whitespace-pre-wrap">
-                    {log.map((entry, i) => <div key={i}>{entry}</div>)}
-                </div>
-            </div>
-        </div>
-    );
+    const addTile = () => {
+        if (tileInput.trim()) {
+            const newTiles = [...tiles, { text: tileInput }];
+            setTiles(newTiles);
+            setTileInput('');
+            safeSend({ type: 'tiles', data: newTiles });
+        }
+    };
 
     if (!joined) {
         return (
-            <div className="p-4">
-                <h1 className="text-xl font-bold">Willkommen zur Prüfungsaufsicht</h1>
-                <input
-                    className="border p-2 my-2 w-full"
-                    placeholder="Nickname wählen"
-                    value={nickname}
-                    onChange={(e) => setNickname(e.target.value)}
-                />
-                <input
-                    className="border p-2 my-2 w-full"
-                    placeholder="Raumname (Peer ID) eingeben"
-                    value={room}
-                    onChange={(e) => setRoom(e.target.value)}
-                />
-                <button
-                    onClick={() => { setJoined(true); connectToRoom(); }}
-                    className="bg-blue-500 text-white px-4 py-2 rounded"
-                >
-                    Raum betreten / Peer verbinden
-                </button>
-            </div>
+            <Container size="xs" mt="xl">
+                <Title order={2} mb="md">Willkommen zur Prüfungsaufsicht</Title>
+                <Stack>
+                    <TextInput label="Nickname" value={nickname} onChange={(e) => setNickname(e.currentTarget.value)} />
+                    <TextInput label="Raum-ID (leer lassen zum Erstellen)" value={room} onChange={(e) => setRoom(e.currentTarget.value)} />
+                    <Button onClick={connectToRoom}>Raum beitreten oder erstellen</Button>
+                </Stack>
+            </Container>
         );
     }
 
-    return renderDashboard();
+    return (
+        <AppShell padding="md">
+            <Container>
+                <Title order={2}>Aufsichts-Dashboard</Title>
+                <Text>Nickname: <Badge>{nickname}</Badge></Text>
+                <Text>Raum: <Badge color="green">{room}</Badge></Text>
+                <Text>Status: {connected ? '✅ Verbunden' : '⏳ Verbindung wird aufgebaut...'}</Text>
+                <Text>Teilnehmer: {peers.join(', ')}</Text>
+
+                <Group mt="md">
+                    <Button onClick={toggleToilet} color="yellow">
+                        Toilette {toiletOccupied ? 'freigeben' : 'besetzen'}
+                    </Button>
+                    <Input
+                        type="number"
+                        placeholder="Dauer in Minuten"
+                        value={durationInput}
+                        onChange={(e) => setDurationInput(e.target.value)}
+                    />
+                    <Button onClick={handleSetDuration} color="violet">Klausurzeit setzen</Button>
+                </Group>
+
+                {timeLeft !== null && (
+                    <Text mt="sm">
+                        Verbleibende Zeit: {`${Math.floor(timeLeft / 60000)}m ${Math.floor((timeLeft % 60000) / 1000)}s`}
+                    </Text>
+                )}
+
+                <Paper shadow="xs" p="md" mt="lg">
+                    <Title order={4}>Kacheln</Title>
+                    <Group mt="sm">
+                        <TextInput
+                            placeholder="Neue Kachel"
+                            value={tileInput}
+                            onChange={(e) => setTileInput(e.currentTarget.value)}
+                        />
+                        <Button onClick={addTile}>Hinzufügen</Button>
+                    </Group>
+                    <SimpleGrid cols={3} spacing="md" mt="md">
+                        {tiles.map((tile, idx) => (
+                            <Card key={idx} shadow="sm" padding="lg" radius="md" withBorder>
+                                <Text align="center">{tile.text}</Text>
+                            </Card>
+                        ))}
+
+                        {room && (
+                            <Card
+                                onClick={() => window.open(`${window.location.origin}?roomId=${room}`, '_blank')}
+                                shadow="sm" padding="lg" radius="md" withBorder
+                                style={{ cursor: 'pointer' }}
+                            >
+                                <Text align="center" style={{ fontWeight: 'bold' }}>Raum-Link: ***</Text>
+                            </Card>
+                        )}
+                    </SimpleGrid>
+                </Paper>
+
+                <Paper shadow="xs" p="md" mt="lg">
+                    <Title order={4}>Chat</Title>
+                    <ScrollArea h={150} mb="sm">
+                        {messages.map((msg, i) => (
+                            <Text key={i}><strong>{msg.user}:</strong> {msg.text}</Text>
+                        ))}
+                    </ScrollArea>
+                    <Group>
+                        <TextInput
+                            value={messageInput}
+                            onChange={(e) => setMessageInput(e.currentTarget.value)}
+                            placeholder="Nachricht eingeben"
+                            style={{ flex: 1 }}
+                        />
+                        <Button onClick={handleSend}>Senden</Button>
+                    </Group>
+                </Paper>
+            </Container>
+        </AppShell>
+    );
 }

@@ -10,13 +10,22 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.0",
     "@esbuild-plugins/node-globals-polyfill": "^0.2.3",
     "@esbuild-plugins/node-modules-polyfill": "^0.2.2",
+    "@mantine/core": "^7.17.4",
+    "@mantine/form": "^7.17.4",
+    "@mantine/hooks": "^7.17.4",
+    "@mantine/modals": "^7.17.4",
+    "@mantine/notifications": "^7.17.4",
     "buffer": "^6.0.3",
+    "clsx": "^2.1.1",
     "peerjs": "^1.5.4",
     "process": "^0.11.10",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-grid-layout": "^1.5.1",
     "simple-peer": "^9.11.1",
     "simple-signal-client": "^3.0.0",
     "socket.io-client": "^4.8.1"
