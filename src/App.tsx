@@ -1,7 +1,19 @@
 // src/App.tsx
 import React, { useEffect, useRef, useState } from 'react';
 import Peer from 'peerjs';
-import { AppShell, SimpleGrid, Container, Title, Stack, Text, TextInput, Button, Divider } from '@mantine/core';
+import {
+    AppShell,
+    SimpleGrid,
+    Container,
+    Title,
+    Stack,
+    Text,
+    TextInput,
+    Button,
+    Divider,
+    Loader,
+    Center,
+} from '@mantine/core';
 import { TileWrapper } from './components/TileWrapper';
 import { BooleanTile } from './components/BooleanTile';
 import { TimerTile } from './components/TimerTile';
@@ -14,11 +26,14 @@ function App() {
     const [roomIdInput, setRoomIdInput] = useState('');
     const [roomId, setRoomId] = useState('');
     const [joined, setJoined] = useState(false);
+    const [connecting, setConnecting] = useState(false);
+    const [connectionStatus, setConnectionStatus] = useState('');
     const [toilet, setToilet] = useState(false);
     const [examEnd, setExamEnd] = useState<Date | null>(null);
     const [tiles, setTiles] = useState<any>({});
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [connectedPeers, setConnectedPeers] = useState<string[]>([]);
+    const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     const peerRef = useRef<Peer | null>(null);
     const connections = useRef<Record<string, Peer.DataConnection>>({});
@@ -51,18 +66,36 @@ function App() {
         const peer = new Peer(myPeerId);
         peerRef.current = peer;
 
+        if (connectToId) {
+            setConnecting(true);
+            setConnectionStatus(`Verbindung mit Peer ${connectToId} wird aufgebaut...`);
+            connectionTimeoutRef.current = setTimeout(() => {
+                setConnecting(false);
+                setConnectionStatus('');
+                setRoomIdInput('');
+                alert('Der Peer ist offline oder antwortet nicht.');
+                peer.disconnect();
+                peer.destroy();
+                peerRef.current = null;
+            }, 10000);
+        }
+
         peer.on('open', (id) => {
             setRoomId(id);
-            setJoined(true);
-            window.history.replaceState({}, document.title, window.location.pathname);
-
-            if (connectToId && connectToId !== id) {
+            if (!connectToId) {
+                setJoined(true);
+                window.history.replaceState({}, document.title, window.location.pathname);
+            } else if (connectToId !== id) {
                 connectToPeer(connectToId);
             }
         });
 
         peer.on('connection', (conn) => {
             setupConnection(conn);
+            // Sobald sich jemand verbindet, senden wir die welcome-Nachricht
+            conn.on('open', () => {
+                conn.send(JSON.stringify({ type: 'welcome' }));
+            });
         });
     };
 
@@ -103,6 +136,13 @@ function App() {
                         connectToPeer(newPeerId);
                     }
                 }
+
+                if (msg.type === 'welcome') {
+                    clearTimeout(connectionTimeoutRef.current!);
+                    setConnecting(false);
+                    setJoined(true);
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                }
             } catch (e) {
                 console.warn('Fehler beim Parsen:', e);
             }
@@ -113,6 +153,34 @@ function App() {
             setConnectedPeers(Object.keys(connections.current));
         });
     };
+
+    if (connecting) {
+        return (
+            <Container size="xs" mt="xl">
+                <Center>
+                    <Stack align="center">
+                        <Loader size="xl" />
+                        <Text>{connectionStatus}</Text>
+                        <Button
+                            variant="light"
+                            color="red"
+                            onClick={() => {
+                                clearTimeout(connectionTimeoutRef.current!);
+                                setConnecting(false);
+                                setConnectionStatus('');
+                                setRoomIdInput('');
+                                peerRef.current?.disconnect();
+                                peerRef.current?.destroy();
+                                peerRef.current = null;
+                            }}
+                        >
+                            Verbindung abbrechen
+                        </Button>
+                    </Stack>
+                </Center>
+            </Container>
+        );
+    }
 
     if (!joined) {
         return (
