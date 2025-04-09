@@ -22,14 +22,12 @@ function App() {
 
     const peerRef = useRef<Peer | null>(null);
     const connections = useRef<Record<string, Peer.DataConnection>>({});
-    const knownPeers = useRef<Set<string>>(new Set());
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
-        const urlRoomId = params.get('roomId');
-        if (urlRoomId) {
-            setRoomId(urlRoomId);
-            setRoomIdInput(urlRoomId);
+        const peerId = params.get('peerId');
+        if (peerId) {
+            setRoomIdInput(peerId);
         }
     }, []);
 
@@ -40,29 +38,30 @@ function App() {
         });
     };
 
-    const handleJoin = (customRoomId?: string) => {
-        const peer = new Peer();
+    const connectToPeer = (peerId: string) => {
+        if (peerRef.current && !connections.current[peerId]) {
+            const conn = peerRef.current.connect(peerId);
+            connections.current[peerId] = conn;
+            setupConnection(conn);
+        }
+    };
+
+    const handleJoin = (connectToId?: string) => {
+        const myPeerId = `${Date.now()}`;
+        const peer = new Peer(myPeerId);
         peerRef.current = peer;
 
         peer.on('open', (id) => {
-            const isHost = !customRoomId;
-            const finalRoomId = isHost ? id : customRoomId;
-            setRoomId(finalRoomId);
+            setRoomId(id);
             setJoined(true);
-
-            if (!isHost) {
-                const conn = peer.connect(finalRoomId);
-                connections.current[conn.peer] = conn;
-                knownPeers.current.add(finalRoomId);
-                setupConnection(conn);
-            }
-
             window.history.replaceState({}, document.title, window.location.pathname);
+
+            if (connectToId && connectToId !== id) {
+                connectToPeer(connectToId);
+            }
         });
 
         peer.on('connection', (conn) => {
-            connections.current[conn.peer] = conn;
-            knownPeers.current.add(conn.peer);
             setupConnection(conn);
         });
     };
@@ -70,15 +69,15 @@ function App() {
     const setupConnection = (conn: Peer.DataConnection) => {
         conn.on('open', () => {
             setConnectedPeers(Object.keys(connections.current));
+            const myId = peerRef.current?.id;
+            if (myId) {
+                const allPeers = Object.keys(connections.current).concat(myId);
+                conn.send(JSON.stringify({ type: 'known-peers', data: allPeers }));
+            }
+            broadcast('new-peer', conn.peer);
             broadcast('toilet', toilet);
             broadcast('examEnd', examEnd);
             broadcast('tiles', tiles);
-
-            // Teile allen bekannten Peers eigene Peer-ID mit
-            const myId = peerRef.current?.id;
-            if (myId) {
-                conn.send(JSON.stringify({ type: 'peer-announce', data: myId }));
-            }
         });
 
         conn.on('data', (data) => {
@@ -89,18 +88,19 @@ function App() {
                 if (msg.type === 'tiles') setTiles(msg.data);
                 if (msg.type === 'chat') setMessages((prev) => [...prev, msg.data]);
 
-                if (msg.type === 'peer-announce') {
-                    const newPeerId = msg.data;
-                    const myId = peerRef.current?.id;
-                    if (newPeerId && newPeerId !== myId && !connections.current[newPeerId]) {
-                        if (!knownPeers.current.has(newPeerId)) {
-                            knownPeers.current.add(newPeerId);
-                            const conn = peerRef.current?.connect(newPeerId);
-                            if (conn) {
-                                connections.current[newPeerId] = conn;
-                                setupConnection(conn);
-                            }
+                if (msg.type === 'known-peers') {
+                    const peerIds: string[] = msg.data;
+                    peerIds.forEach((pid) => {
+                        if (pid && pid !== peerRef.current?.id && !connections.current[pid]) {
+                            connectToPeer(pid);
                         }
+                    });
+                }
+
+                if (msg.type === 'new-peer') {
+                    const newPeerId = msg.data;
+                    if (newPeerId && newPeerId !== peerRef.current?.id && !connections.current[newPeerId]) {
+                        connectToPeer(newPeerId);
                     }
                 }
             } catch (e) {
@@ -115,7 +115,6 @@ function App() {
     };
 
     if (!joined) {
-        const hasRoomFromUrl = !!roomId;
         return (
             <Container size="xs" mt="xl">
                 <Title order={2} mb="md">Prüfungsaufsichts-Dashboard</Title>
@@ -125,25 +124,15 @@ function App() {
 
                     <Divider my="sm" label="Raum beitreten" labelPosition="center" />
 
-                    {hasRoomFromUrl ? (
-                        <Button onClick={() => handleJoin(roomId)}>Raum beitreten</Button>
-                    ) : (
-                        <>
-                            <TextInput
-                                placeholder="Raum-ID eingeben"
-                                value={roomIdInput}
-                                onChange={(e) => setRoomIdInput(e.currentTarget.value)}
-                            />
-                            <Button onClick={() => handleJoin(roomIdInput)}>Raum beitreten</Button>
-                        </>
-                    )}
+                    <TextInput
+                        placeholder="Peer-ID eingeben"
+                        value={roomIdInput}
+                        onChange={(e) => setRoomIdInput(e.currentTarget.value)}
+                    />
+                    <Button onClick={() => handleJoin(roomIdInput)}>Beitreten</Button>
 
-                    {!hasRoomFromUrl && (
-                        <>
-                            <Divider my="sm" label="Oder neuen Raum erstellen" labelPosition="center" />
-                            <Button onClick={() => handleJoin()}>Neuen Raum erstellen</Button>
-                        </>
-                    )}
+                    <Divider my="sm" label="Oder neuen Link erstellen" labelPosition="center" />
+                    <Button onClick={() => handleJoin()}>Eigenen Link erstellen</Button>
                 </Stack>
             </Container>
         );
@@ -152,7 +141,7 @@ function App() {
     return (
         <AppShell padding="md">
             <SimpleGrid cols={6} spacing="md">
-                <LinkTile title="Raum-Link" roomId={roomId} />
+                <LinkTile title="Mein Raum-Link" roomId={roomId} />
                 <BooleanTile
                     title="Toilette"
                     value={toilet}
