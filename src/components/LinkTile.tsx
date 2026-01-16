@@ -13,7 +13,9 @@ interface LinkTileProps {
 
 export function LinkTile({ title, roomId, defaultSpan = 2, onSpanChange }: LinkTileProps) {
     const [revealed, setRevealed] = useState(false);
-    const roomUrl = `${window.location.origin}?roomId=${roomId}`;
+    const baseUrl = new URL(import.meta.env.BASE_URL, window.location.origin);
+    baseUrl.searchParams.set('roomId', roomId);
+    const roomUrl = baseUrl.toString();
 
     const copyToClipboard = () => {
         navigator.clipboard.writeText(roomUrl);
