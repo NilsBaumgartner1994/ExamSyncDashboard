@@ -93,6 +93,9 @@ function App() {
     const handleJoin = (connectToCode?: string) => {
         const normalizedCode = connectToCode ? normalizeRoomCode(connectToCode) : '';
         const connectToId = normalizedCode || undefined;
+        if (connectToCode) {
+            setRoomIdInput(normalizedCode);
+        }
         if (normalizedCode && !/^\d+$/.test(normalizedCode)) {
             alert('Ungültige Raum-ID. Bitte nur Ziffern verwenden.');
             return;
