@@ -93,6 +93,9 @@ function App() {
     const handleJoin = (connectToCode?: string) => {
         const normalizedCode = connectToCode ? normalizeRoomCode(connectToCode) : '';
         const connectToId = normalizedCode || undefined;
+        if (connectToCode) {
+            setRoomIdInput(normalizedCode);
+        }
         if (normalizedCode && !/^\d+$/.test(normalizedCode)) {
             alert('Ungültige Raum-ID. Bitte nur Ziffern verwenden.');
             return;
@@ -258,6 +261,8 @@ function App() {
                     <TextInput
                         placeholder="Raum-Code eingeben"
                         value={roomIdInput}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
                         onChange={(e) => setRoomIdInput(normalizeRoomCode(e.currentTarget.value))}
                     />
                     <Group grow>
