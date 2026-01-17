@@ -239,8 +239,8 @@ function App() {
     }
 
     return (
-        <AppShell padding="md">
-            <SimpleGrid cols={6} spacing="md">
+        <AppShell padding={{ base: 'md', sm: 'lg' }}>
+            <SimpleGrid cols={{ base: 1, sm: 6 }} spacing="md">
                 <LinkTile title="Mein Raum-Link" roomId={roomCode} />
                 <ToiletTile
                     title="Toilette"
