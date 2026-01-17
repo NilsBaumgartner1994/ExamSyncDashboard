@@ -1,6 +1,7 @@
 // src/components/TileWrapper.tsx
 import React, { ReactNode, useState } from 'react';
-import { Card, Group, Text, ActionIcon, Collapse } from '@mantine/core';
+import { Card, Group, Text, ActionIcon, Collapse, useMantineTheme } from '@mantine/core';
+import { useMediaQuery } from '@mantine/hooks';
 import { IconMinus, IconPlus, IconChevronDown, IconChevronUp } from "@tabler/icons-react";
 
 interface TileWrapperProps {
@@ -15,13 +16,15 @@ interface TileWrapperProps {
 export function TileWrapper({
                                 title,
                                 children,
-                                defaultSpan = 2,
+                                defaultSpan = 4,
                                 onSpanChange,
                                 headerActions,
                                 cardStyle,
                             }: TileWrapperProps) {
     const [collapsed, setCollapsed] = useState(false);
     const [span, setSpan] = useState(defaultSpan);
+    const theme = useMantineTheme();
+    const isMobile = useMediaQuery(`(max-width: ${theme.breakpoints.sm})`);
 
     const changeSpan = (delta: number) => {
         const newSpan = Math.min(6, Math.max(1, span + delta));
@@ -34,7 +37,7 @@ export function TileWrapper({
             shadow="sm"
             radius="md"
             withBorder
-            style={{ gridColumn: `span ${span}`, ...cardStyle }}
+            style={{ gridColumn: `span ${isMobile ? 1 : span}`, ...cardStyle }}
         >
             <Group justify="space-between" mb="xs">
                 <Text fw={500}>{title}</Text>
