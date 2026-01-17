@@ -23,6 +23,7 @@ import { StatusTile } from './components/StatusTile';
 import { ChatTile, ChatMessage } from './components/ChatTile';
 import { ProtocolTile } from './components/ProtocolTile';
 import { ToiletTile } from './components/ToiletTile';
+import { RoomStatus, RoomStatusTile } from './components/RoomStatusTile';
 import { NotesTile } from './components/NotesTile';
 import { TileWrapper } from './components/TileWrapper';
 import { formatRoomIdForDisplay, normalizeRoomCode } from './utils/roomCode';
@@ -35,6 +36,7 @@ function App() {
     const [connecting, setConnecting] = useState(false);
     const [connectionStatus, setConnectionStatus] = useState('');
     const [toiletOccupants, setToiletOccupants] = useState<string[]>([]);
+    const [roomStatuses, setRoomStatuses] = useState<RoomStatus[]>([]);
     const [examEnd, setExamEnd] = useState<Date | null>(null);
     const [tiles, setTiles] = useState<any>({});
     const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -51,6 +53,7 @@ function App() {
     const tileDefinitions = [
         { key: 'link', label: 'Mein Raum-Link' },
         { key: 'toilet', label: 'Toilette' },
+        { key: 'room-status', label: 'Raum-Status' },
         { key: 'timer', label: 'Klausurzeit' },
         { key: 'chat', label: 'Dozenten-Chat' },
         { key: 'notes', label: 'Notizen' },
@@ -122,6 +125,10 @@ function App() {
         } else {
             broadcast('notes-state', payload);
         }
+    };
+
+    const broadcastRoomStatuses = (nextStatuses: RoomStatus[]) => {
+        broadcast('room-status', nextStatuses);
     };
 
     const handleNotesLock = (force = false) => {
@@ -233,6 +240,7 @@ function App() {
             broadcast('new-peer', conn.peer);
             broadcast('examEnd', examEnd);
             broadcast('tiles', tiles);
+            conn.send(JSON.stringify({ type: 'room-status', data: roomStatuses }));
             sendNotesState(conn);
         });
 
@@ -249,6 +257,9 @@ function App() {
                     setNotesText(msg.data.text ?? '');
                     setNotesLockedBy(msg.data.lockedBy ?? null);
                     setNotesLockedByName(msg.data.lockedByName ?? null);
+                }
+                if (msg.type === 'room-status') {
+                    setRoomStatuses(Array.isArray(msg.data) ? msg.data : []);
                 }
 
                 if (msg.type === 'known-peers') {
@@ -414,6 +425,50 @@ function App() {
                             addProtocolEntry('Toilette', `frei (${name} zurück)`);
                         }}
                         onClose={() => hideTile('toilet')}
+                    />
+                )}
+                {!hiddenTiles['room-status'] && (
+                    <RoomStatusTile
+                        title="Raum-Status"
+                        rooms={roomStatuses}
+                        onAddRoom={(name) => {
+                            setRoomStatuses((prev) => {
+                                if (prev.some((room) => room.name === name)) return prev;
+                                const next = [...prev, { name, needsHelp: false }];
+                                broadcastRoomStatuses(next);
+                                return next;
+                            });
+                        }}
+                        onToggleHelp={(name) => {
+                            setRoomStatuses((prev) => {
+                                const next = prev.map((room) =>
+                                    room.name === name
+                                        ? { ...room, needsHelp: !room.needsHelp }
+                                        : room,
+                                );
+                                broadcastRoomStatuses(next);
+                                return next;
+                            });
+                        }}
+                        onClearHelp={(name) => {
+                            setRoomStatuses((prev) => {
+                                const next = prev.map((room) =>
+                                    room.name === name
+                                        ? { ...room, needsHelp: false }
+                                        : room,
+                                );
+                                broadcastRoomStatuses(next);
+                                return next;
+                            });
+                        }}
+                        onRemoveRoom={(name) => {
+                            setRoomStatuses((prev) => {
+                                const next = prev.filter((room) => room.name !== name);
+                                broadcastRoomStatuses(next);
+                                return next;
+                            });
+                        }}
+                        onClose={() => hideTile('room-status')}
                     />
                 )}
                 {!hiddenTiles.timer && (
