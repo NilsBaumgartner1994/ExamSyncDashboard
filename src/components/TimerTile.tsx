@@ -48,6 +48,8 @@ export function TimerTile({
                     placeholder="Minuten eingeben"
                     value={input}
                     onChange={(e) => setInput(e.currentTarget.value)}
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                 />
                 <Button onClick={handleSet}>Klausurzeit setzen</Button>
             </Stack>
