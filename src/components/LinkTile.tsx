@@ -4,6 +4,7 @@ import { Button, Stack, Text, TextInput, Group, ActionIcon, Tooltip, Image } fro
 import { IconCopy } from '@tabler/icons-react';
 import QRCode from 'qrcode';
 import { TileWrapper } from './TileWrapper';
+import { formatRoomIdForDisplay, normalizeRoomCode } from '../utils/roomCode';
 
 interface LinkTileProps {
     title: string;
@@ -15,8 +16,9 @@ interface LinkTileProps {
 export function LinkTile({ title, roomId, defaultSpan = 2, onSpanChange }: LinkTileProps) {
     const [revealed, setRevealed] = useState(false);
     const [qrCodeUrl, setQrCodeUrl] = useState('');
+    const normalizedRoomId = normalizeRoomCode(roomId);
     const baseUrl = new URL(import.meta.env.BASE_URL, window.location.origin);
-    baseUrl.searchParams.set('roomId', roomId);
+    baseUrl.searchParams.set('roomId', normalizedRoomId);
     const roomUrl = baseUrl.toString();
 
     useEffect(() => {
@@ -33,8 +35,12 @@ export function LinkTile({ title, roomId, defaultSpan = 2, onSpanChange }: LinkT
         };
     }, [roomUrl]);
 
-    const copyToClipboard = () => {
+    const copyLinkToClipboard = () => {
         navigator.clipboard.writeText(roomUrl);
+    };
+
+    const copyRoomIdToClipboard = () => {
+        navigator.clipboard.writeText(normalizedRoomId);
     };
 
     return (
@@ -47,7 +53,20 @@ export function LinkTile({ title, roomId, defaultSpan = 2, onSpanChange }: LinkT
                         <Group>
                             <TextInput value={roomUrl} readOnly style={{ width: 280 }} />
                             <Tooltip label="In Zwischenablage kopieren">
-                                <ActionIcon onClick={copyToClipboard} variant="light">
+                                <ActionIcon onClick={copyLinkToClipboard} variant="light">
+                                    <IconCopy size={18} />
+                                </ActionIcon>
+                            </Tooltip>
+                        </Group>
+                        <Text size="sm">Raum-ID zum Beitreten</Text>
+                        <Group>
+                            <TextInput
+                                value={formatRoomIdForDisplay(normalizedRoomId)}
+                                readOnly
+                                style={{ width: 280 }}
+                            />
+                            <Tooltip label="Raum-ID ohne Leerzeichen kopieren">
+                                <ActionIcon onClick={copyRoomIdToClipboard} variant="light">
                                     <IconCopy size={18} />
                                 </ActionIcon>
                             </Tooltip>

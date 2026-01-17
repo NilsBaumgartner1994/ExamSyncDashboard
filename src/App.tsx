@@ -23,7 +23,7 @@ import { StatusTile } from './components/StatusTile';
 import { ChatTile, ChatMessage } from './components/ChatTile';
 import { ProtocolTile } from './components/ProtocolTile';
 import { ToiletTile } from './components/ToiletTile';
-import { decodeRoomCode, encodeRoomId, normalizeRoomCode } from './utils/roomCode';
+import { formatRoomIdForDisplay, normalizeRoomCode } from './utils/roomCode';
 
 QrScanner.WORKER_PATH = new URL('qr-scanner/qr-scanner-worker.min.js', import.meta.url).toString();
 
@@ -31,7 +31,6 @@ function App() {
     const [nickname, setNickname] = useState('Anonym');
     const [roomIdInput, setRoomIdInput] = useState('');
     const [roomId, setRoomId] = useState('');
-    const [roomCode, setRoomCode] = useState('');
     const [joined, setJoined] = useState(false);
     const [connecting, setConnecting] = useState(false);
     const [connectionStatus, setConnectionStatus] = useState('');
@@ -106,9 +105,9 @@ function App() {
 
     const handleJoin = (connectToCode?: string) => {
         const normalizedCode = connectToCode ? normalizeRoomCode(connectToCode) : '';
-        const connectToId = normalizedCode ? decodeRoomCode(normalizedCode) : undefined;
-        if (normalizedCode && !connectToId) {
-            alert('Ungültiger Raum-Code. Bitte nur die erlaubten Buchstaben ohne O und I verwenden.');
+        const connectToId = normalizedCode || undefined;
+        if (normalizedCode && !/^\d+$/.test(normalizedCode)) {
+            alert('Ungültige Raum-ID. Bitte nur Ziffern verwenden.');
             return;
         }
         const myPeerId = `${Date.now()}`;
@@ -117,7 +116,9 @@ function App() {
 
         if (connectToId) {
             setConnecting(true);
-            setConnectionStatus(`Verbindung mit Raum-Code ${normalizedCode} wird aufgebaut...`);
+            setConnectionStatus(
+                `Verbindung mit Raum-ID ${formatRoomIdForDisplay(normalizedCode)} wird aufgebaut...`,
+            );
             connectionTimeoutRef.current = setTimeout(() => {
                 setConnecting(false);
                 setConnectionStatus('');
@@ -131,7 +132,6 @@ function App() {
 
         peer.on('open', (id) => {
             setRoomId(id);
-            setRoomCode(encodeRoomId(id));
             if (!connectToId) {
                 setJoined(true);
                 window.history.replaceState({}, document.title, window.location.pathname);
@@ -348,7 +348,7 @@ function App() {
     return (
         <AppShell padding={{ base: 'md', sm: 'lg' }}>
             <SimpleGrid cols={{ base: 1, sm: 6 }} spacing="md">
-                <LinkTile title="Mein Raum-Link" roomId={roomCode} />
+                <LinkTile title="Mein Raum-Link" roomId={roomId} />
                 <ToiletTile
                     title="Toilette"
                     occupants={toiletOccupants}
@@ -394,8 +394,8 @@ function App() {
                 />
                 <StatusTile
                     title="Verbindung"
-                    peerId={peerRef.current?.id ? encodeRoomId(peerRef.current.id) : undefined}
-                    connectedPeers={connectedPeers.map((peerId) => encodeRoomId(peerId))}
+                    peerId={peerRef.current?.id}
+                    connectedPeers={connectedPeers}
                 />
             </SimpleGrid>
         </AppShell>
