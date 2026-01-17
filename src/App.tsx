@@ -38,14 +38,6 @@ function App() {
     const peerRef = useRef<Peer | null>(null);
     const connections = useRef<Record<string, Peer.DataConnection>>({});
 
-    useEffect(() => {
-        const params = new URLSearchParams(window.location.search);
-        const peerId = params.get('peerId');
-        if (peerId) {
-            setRoomIdInput(peerId);
-        }
-    }, []);
-
     const broadcast = (type: string, data: any) => {
         const msg = JSON.stringify({ type, data });
         Object.values(connections.current).forEach((conn) => {
@@ -98,6 +90,15 @@ function App() {
             });
         });
     };
+
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const roomParam = params.get('roomId') ?? params.get('peerId');
+        if (roomParam) {
+            setRoomIdInput(roomParam);
+            handleJoin(roomParam);
+        }
+    }, []);
 
     const setupConnection = (conn: Peer.DataConnection) => {
         conn.on('open', () => {
