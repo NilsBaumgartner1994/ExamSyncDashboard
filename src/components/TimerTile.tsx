@@ -9,6 +9,7 @@ interface TimerTileProps {
     onSetMinutes: (minutes: number) => void;
     defaultSpan?: number;
     onSpanChange?: (span: number) => void;
+    onClose?: () => void;
 }
 
 export function TimerTile({
@@ -17,6 +18,7 @@ export function TimerTile({
                               onSetMinutes,
                               defaultSpan = 2,
                               onSpanChange,
+                              onClose,
                           }: TimerTileProps) {
     const [input, setInput] = useState('');
     const [remaining, setRemaining] = useState('');
@@ -43,7 +45,12 @@ export function TimerTile({
     const quickMinutes = [30, 40, 60, 70, 90];
 
     return (
-        <TileWrapper title={title} defaultSpan={defaultSpan} onSpanChange={onSpanChange}>
+        <TileWrapper
+            title={title}
+            defaultSpan={defaultSpan}
+            onSpanChange={onSpanChange}
+            onClose={onClose}
+        >
             <Stack>
                 <Text ta="center">Restzeit: {remaining}</Text>
                 <Group gap="xs" justify="center">

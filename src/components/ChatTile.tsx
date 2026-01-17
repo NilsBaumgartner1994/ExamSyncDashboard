@@ -16,6 +16,7 @@ interface ChatTileProps {
     onNicknameChange: (nickname: string) => void;
     defaultSpan?: number;
     onSpanChange?: (span: number) => void;
+    onClose?: () => void;
 }
 
 export function ChatTile({
@@ -26,6 +27,7 @@ export function ChatTile({
                              onNicknameChange,
                              defaultSpan = 3,
                              onSpanChange,
+                             onClose,
                          }: ChatTileProps) {
     const [input, setInput] = useState('');
 
@@ -38,7 +40,12 @@ export function ChatTile({
     };
 
     return (
-        <TileWrapper title={title} defaultSpan={defaultSpan} onSpanChange={onSpanChange}>
+        <TileWrapper
+            title={title}
+            defaultSpan={defaultSpan}
+            onSpanChange={onSpanChange}
+            onClose={onClose}
+        >
             <Stack>
                 <ScrollArea h={150}>
                     {messages.map((msg, i) => (

@@ -24,6 +24,7 @@ import { ChatTile, ChatMessage } from './components/ChatTile';
 import { ProtocolTile } from './components/ProtocolTile';
 import { ToiletTile } from './components/ToiletTile';
 import { NotesTile } from './components/NotesTile';
+import { TileWrapper } from './components/TileWrapper';
 import { formatRoomIdForDisplay, normalizeRoomCode } from './utils/roomCode';
 
 function App() {
@@ -45,6 +46,17 @@ function App() {
     const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const [scanOpened, setScanOpened] = useState(false);
     const [scanError, setScanError] = useState('');
+    const [hiddenTiles, setHiddenTiles] = useState<Record<string, boolean>>({});
+
+    const tileDefinitions = [
+        { key: 'link', label: 'Mein Raum-Link' },
+        { key: 'toilet', label: 'Toilette' },
+        { key: 'timer', label: 'Klausurzeit' },
+        { key: 'chat', label: 'Dozenten-Chat' },
+        { key: 'notes', label: 'Notizen' },
+        { key: 'protocol', label: 'Protokoll' },
+        { key: 'status', label: 'Verbindung' },
+    ];
 
     const peerRef = useRef<Peer | null>(null);
     const connections = useRef<Record<string, Peer.DataConnection>>({});
@@ -355,68 +367,138 @@ function App() {
         );
     }
 
+    const hideTile = (key: string) => {
+        setHiddenTiles((prev) => ({ ...prev, [key]: true }));
+    };
+
+    const showTile = (key: string) => {
+        setHiddenTiles((prev) => ({ ...prev, [key]: false }));
+    };
+
+    const showAllTiles = () => {
+        const nextState = tileDefinitions.reduce<Record<string, boolean>>((acc, tile) => {
+            acc[tile.key] = false;
+            return acc;
+        }, {});
+        setHiddenTiles(nextState);
+    };
+
+    const hiddenTileList = tileDefinitions.filter((tile) => hiddenTiles[tile.key]);
+
     return (
         <AppShell padding={{ base: 'md', sm: 'lg' }}>
             <SimpleGrid cols={{ base: 1, sm: 6 }} spacing="md">
-                <LinkTile title="Mein Raum-Link" roomId={roomId} />
-                <ToiletTile
-                    title="Toilette"
-                    occupants={toiletOccupants}
-                    onOccupy={(name) => {
-                        setToiletOccupants((prev) => [...prev, name]);
-                        addProtocolEntry('Toilette', `besetzt (${name})`);
-                    }}
-                    onRelease={(name) => {
-                        setToiletOccupants((prev) => {
-                            const index = prev.indexOf(name);
-                            if (index === -1) return prev;
-                            const next = [...prev];
-                            next.splice(index, 1);
-                            return next;
-                        });
-                        addProtocolEntry('Toilette', `frei (${name} zurück)`);
-                    }}
-                />
-                <TimerTile
-                    title="Klausurzeit"
-                    endTime={examEnd}
-                    onSetMinutes={(min) => {
-                        const end = new Date(Date.now() + min * 60000);
-                        setExamEnd(end);
-                        broadcast('examEnd', end);
-                    }}
-                />
-                <ChatTile
-                    title="Dozenten-Chat"
-                    messages={messages}
-                    onSend={(msg) => {
-                        setMessages((prev) => [...prev, msg]);
-                        addProtocolEntry('Chat', `von ${msg.user}: ${msg.text}`);
-                        broadcast('chat', msg);
-                    }}
-                    nickname={nickname}
-                    onNicknameChange={setNickname}
-                />
-                <NotesTile
-                    title="Notizen"
-                    text={notesText}
-                    lockedBy={notesLockedBy}
-                    lockedByName={notesLockedByName}
-                    myPeerId={peerRef.current?.id}
-                    onRequestLock={() => handleNotesLock(false)}
-                    onForceLock={() => handleNotesLock(true)}
-                    onSave={handleNotesSave}
-                />
-                <ProtocolTile
-                    title="Protokoll"
-                    entries={protocolEntries}
-                    onExport={exportProtocol}
-                />
-                <StatusTile
-                    title="Verbindung"
-                    peerId={peerRef.current?.id}
-                    connectedPeers={connectedPeers}
-                />
+                {!hiddenTiles.link && (
+                    <LinkTile
+                        title="Mein Raum-Link"
+                        roomId={roomId}
+                        onClose={() => hideTile('link')}
+                    />
+                )}
+                {!hiddenTiles.toilet && (
+                    <ToiletTile
+                        title="Toilette"
+                        occupants={toiletOccupants}
+                        onOccupy={(name) => {
+                            setToiletOccupants((prev) => [...prev, name]);
+                            addProtocolEntry('Toilette', `besetzt (${name})`);
+                        }}
+                        onRelease={(name) => {
+                            setToiletOccupants((prev) => {
+                                const index = prev.indexOf(name);
+                                if (index === -1) return prev;
+                                const next = [...prev];
+                                next.splice(index, 1);
+                                return next;
+                            });
+                            addProtocolEntry('Toilette', `frei (${name} zurück)`);
+                        }}
+                        onClose={() => hideTile('toilet')}
+                    />
+                )}
+                {!hiddenTiles.timer && (
+                    <TimerTile
+                        title="Klausurzeit"
+                        endTime={examEnd}
+                        onSetMinutes={(min) => {
+                            const end = new Date(Date.now() + min * 60000);
+                            setExamEnd(end);
+                            broadcast('examEnd', end);
+                        }}
+                        onClose={() => hideTile('timer')}
+                    />
+                )}
+                {!hiddenTiles.chat && (
+                    <ChatTile
+                        title="Dozenten-Chat"
+                        messages={messages}
+                        onSend={(msg) => {
+                            setMessages((prev) => [...prev, msg]);
+                            addProtocolEntry('Chat', `von ${msg.user}: ${msg.text}`);
+                            broadcast('chat', msg);
+                        }}
+                        nickname={nickname}
+                        onNicknameChange={setNickname}
+                        onClose={() => hideTile('chat')}
+                    />
+                )}
+                {!hiddenTiles.notes && (
+                    <NotesTile
+                        title="Notizen"
+                        text={notesText}
+                        lockedBy={notesLockedBy}
+                        lockedByName={notesLockedByName}
+                        myPeerId={peerRef.current?.id}
+                        onRequestLock={() => handleNotesLock(false)}
+                        onForceLock={() => handleNotesLock(true)}
+                        onSave={handleNotesSave}
+                        onClose={() => hideTile('notes')}
+                    />
+                )}
+                {!hiddenTiles.protocol && (
+                    <ProtocolTile
+                        title="Protokoll"
+                        entries={protocolEntries}
+                        onExport={exportProtocol}
+                        onClose={() => hideTile('protocol')}
+                    />
+                )}
+                {!hiddenTiles.status && (
+                    <StatusTile
+                        title="Verbindung"
+                        peerId={peerRef.current?.id}
+                        connectedPeers={connectedPeers}
+                        onClose={() => hideTile('status')}
+                    />
+                )}
+                <TileWrapper title="Karten verwalten" defaultSpan={2}>
+                    <Stack>
+                        {hiddenTileList.length > 0 ? (
+                            <>
+                                <Text size="sm">Ausgeblendete Karten:</Text>
+                                <Group gap="xs" wrap="wrap">
+                                    {hiddenTileList.map((tile) => (
+                                        <Button
+                                            key={tile.key}
+                                            size="xs"
+                                            variant="light"
+                                            onClick={() => showTile(tile.key)}
+                                        >
+                                            {tile.label}
+                                        </Button>
+                                    ))}
+                                </Group>
+                                <Button size="xs" variant="subtle" onClick={showAllTiles}>
+                                    Alle Karten anzeigen
+                                </Button>
+                            </>
+                        ) : (
+                            <Text size="sm" c="dimmed">
+                                Alle Karten sind sichtbar.
+                            </Text>
+                        )}
+                    </Stack>
+                </TileWrapper>
             </SimpleGrid>
         </AppShell>
     );

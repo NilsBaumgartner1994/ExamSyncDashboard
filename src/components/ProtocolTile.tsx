@@ -9,6 +9,7 @@ interface ProtocolTileProps {
     onExport: () => void;
     defaultSpan?: number;
     onSpanChange?: (span: number) => void;
+    onClose?: () => void;
 }
 
 export function ProtocolTile({
@@ -17,9 +18,15 @@ export function ProtocolTile({
                                  onExport,
                                  defaultSpan = 3,
                                  onSpanChange,
+                                 onClose,
                              }: ProtocolTileProps) {
     return (
-        <TileWrapper title={title} defaultSpan={defaultSpan} onSpanChange={onSpanChange}>
+        <TileWrapper
+            title={title}
+            defaultSpan={defaultSpan}
+            onSpanChange={onSpanChange}
+            onClose={onClose}
+        >
             <Stack>
                 <ScrollArea h={150}>
                     {entries.length > 0 ? (
