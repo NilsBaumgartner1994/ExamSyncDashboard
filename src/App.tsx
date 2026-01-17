@@ -261,6 +261,8 @@ function App() {
                     <TextInput
                         placeholder="Raum-Code eingeben"
                         value={roomIdInput}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
                         onChange={(e) => setRoomIdInput(normalizeRoomCode(e.currentTarget.value))}
                     />
                     <Group grow>
