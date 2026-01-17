@@ -8,9 +8,18 @@ interface TileWrapperProps {
     children: ReactNode;
     defaultSpan?: number;
     onSpanChange?: (span: number) => void;
+    headerActions?: ReactNode;
+    cardStyle?: React.CSSProperties;
 }
 
-export function TileWrapper({ title, children, defaultSpan = 2, onSpanChange }: TileWrapperProps) {
+export function TileWrapper({
+                                title,
+                                children,
+                                defaultSpan = 2,
+                                onSpanChange,
+                                headerActions,
+                                cardStyle,
+                            }: TileWrapperProps) {
     const [collapsed, setCollapsed] = useState(false);
     const [span, setSpan] = useState(defaultSpan);
 
@@ -21,12 +30,18 @@ export function TileWrapper({ title, children, defaultSpan = 2, onSpanChange }: 
     };
 
     return (
-        <Card shadow="sm" radius="md" withBorder style={{ gridColumn: `span ${span}` }}>
+        <Card
+            shadow="sm"
+            radius="md"
+            withBorder
+            style={{ gridColumn: `span ${span}`, ...cardStyle }}
+        >
             <Group justify="space-between" mb="xs">
                 <Text fw={500}>{title}</Text>
                 <Group gap="xs">
                     <ActionIcon onClick={() => changeSpan(-1)} variant="light"><IconMinus size={16} /></ActionIcon>
                     <ActionIcon onClick={() => changeSpan(1)} variant="light"><IconPlus size={16} /></ActionIcon>
+                    {headerActions}
                     <ActionIcon onClick={() => setCollapsed((c) => !c)} variant="light">
                         {collapsed ? <IconChevronDown size={16} /> : <IconChevronUp size={16} />}
                     </ActionIcon>
