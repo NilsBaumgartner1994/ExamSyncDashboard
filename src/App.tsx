@@ -16,7 +16,7 @@ import {
     Modal,
     Group,
 } from '@mantine/core';
-import QrScanner from 'qr-scanner';
+import { Scanner } from '@yudiel/react-qr-scanner';
 import { TimerTile } from './components/TimerTile';
 import { LinkTile } from './components/LinkTile';
 import { StatusTile } from './components/StatusTile';
@@ -24,8 +24,6 @@ import { ChatTile, ChatMessage } from './components/ChatTile';
 import { ProtocolTile } from './components/ProtocolTile';
 import { ToiletTile } from './components/ToiletTile';
 import { decodeRoomCode, encodeRoomId, normalizeRoomCode } from './utils/roomCode';
-
-QrScanner.WORKER_PATH = new URL('qr-scanner/qr-scanner-worker.min.js', import.meta.url).toString();
 
 function App() {
     const [nickname, setNickname] = useState('Anonym');
@@ -44,8 +42,6 @@ function App() {
     const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const [scanOpened, setScanOpened] = useState(false);
     const [scanError, setScanError] = useState('');
-    const videoRef = useRef<HTMLVideoElement | null>(null);
-    const scannerRef = useRef<QrScanner | null>(null);
 
     const peerRef = useRef<Peer | null>(null);
     const connections = useRef<Record<string, Peer.DataConnection>>({});
@@ -85,15 +81,6 @@ function App() {
             // Not a URL, fall back to raw value.
         }
         return normalizeRoomCode(rawValue);
-    };
-
-    const stopScan = () => {
-        scannerRef.current?.stop();
-        scannerRef.current?.destroy();
-        scannerRef.current = null;
-        if (videoRef.current) {
-            videoRef.current.srcObject = null;
-        }
     };
 
     const connectToPeer = (peerId: string) => {
@@ -160,59 +147,22 @@ function App() {
     }, []);
 
     useEffect(() => {
-        if (!scanOpened) {
-            stopScan();
+        if (scanOpened) {
+            setScanError('');
+        }
+    }, [scanOpened]);
+
+    const handleScan = (detectedCodes: Array<{ rawValue: string }>) => {
+        if (!detectedCodes.length) return;
+        const roomCode = extractRoomCode(detectedCodes[0].rawValue);
+        if (roomCode) {
+            setRoomIdInput(roomCode);
+            setScanOpened(false);
+            handleJoin(roomCode);
             return;
         }
-
-        let isActive = true;
-
-        const startScan = async () => {
-            setScanError('');
-            if (!videoRef.current) {
-                setScanError('Videoelement konnte nicht gestartet werden.');
-                return;
-            }
-            try {
-                const hasCamera = await QrScanner.hasCamera();
-                if (!hasCamera) {
-                    setScanError('Keine Kamera verfügbar.');
-                    return;
-                }
-
-                const scanner = new QrScanner(
-                    videoRef.current,
-                    (result) => {
-                        if (!isActive) return;
-                        const roomCode = extractRoomCode(result.data);
-                        if (roomCode) {
-                            stopScan();
-                            setRoomIdInput(roomCode);
-                            setScanOpened(false);
-                            handleJoin(roomCode);
-                            return;
-                        }
-                        setScanError('QR-Code enthält keine Raum-ID.');
-                    },
-                    {
-                        preferredCamera: 'environment',
-                        returnDetailedScanResult: true,
-                    },
-                );
-                scannerRef.current = scanner;
-                await scanner.start();
-            } catch (error) {
-                setScanError('Kamera konnte nicht gestartet werden.');
-            }
-        };
-
-        startScan();
-
-        return () => {
-            isActive = false;
-            stopScan();
-        };
-    }, [scanOpened]);
+        setScanError('QR-Code enthält keine Raum-ID.');
+    };
 
     const setupConnection = (conn: Peer.DataConnection) => {
         conn.on('open', () => {
@@ -328,12 +278,18 @@ function App() {
                 >
                     <Stack>
                         <Text size="sm">Kamera auf den QR-Code mit dem Raum-Link richten.</Text>
-                        <video
-                            ref={videoRef}
-                            style={{ width: '100%', borderRadius: 8 }}
-                            muted
-                            playsInline
-                        />
+                        {scanOpened && (
+                            <Scanner
+                                onScan={handleScan}
+                                onError={() => setScanError('Kamera konnte nicht gestartet werden.')}
+                                constraints={{ facingMode: 'environment' }}
+                                formats={['qr_code']}
+                                styles={{
+                                    container: { width: '100%', borderRadius: 8, overflow: 'hidden' },
+                                    video: { width: '100%' },
+                                }}
+                            />
+                        )}
                         {scanError && (
                             <Text size="sm" c="red">
                                 {scanError}
