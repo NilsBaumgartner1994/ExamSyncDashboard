@@ -13,6 +13,8 @@ import {
     Divider,
     Loader,
     Center,
+    Modal,
+    Group,
 } from '@mantine/core';
 import { TimerTile } from './components/TimerTile';
 import { LinkTile } from './components/LinkTile';
@@ -37,6 +39,11 @@ function App() {
     const [connectedPeers, setConnectedPeers] = useState<string[]>([]);
     const [protocolEntries, setProtocolEntries] = useState<string[]>([]);
     const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const [scanOpened, setScanOpened] = useState(false);
+    const [scanError, setScanError] = useState('');
+    const videoRef = useRef<HTMLVideoElement | null>(null);
+    const scanStreamRef = useRef<MediaStream | null>(null);
+    const scanFrameRef = useRef<number | null>(null);
 
     const peerRef = useRef<Peer | null>(null);
     const connections = useRef<Record<string, Peer.DataConnection>>({});
@@ -66,6 +73,37 @@ function App() {
         link.remove();
         URL.revokeObjectURL(url);
     };
+
+    const extractRoomCode = (rawValue: string) => {
+        try {
+            const url = new URL(rawValue);
+            const param = url.searchParams.get('roomId') ?? url.searchParams.get('peerId');
+            if (param) return normalizeRoomCode(param);
+        } catch (error) {
+            // Not a URL, fall back to raw value.
+        }
+        return normalizeRoomCode(rawValue);
+    };
+
+    const stopScan = () => {
+        if (scanFrameRef.current) {
+            cancelAnimationFrame(scanFrameRef.current);
+            scanFrameRef.current = null;
+        }
+        if (scanStreamRef.current) {
+            scanStreamRef.current.getTracks().forEach((track) => track.stop());
+            scanStreamRef.current = null;
+        }
+        if (videoRef.current) {
+            videoRef.current.srcObject = null;
+        }
+    };
+
+    type BarcodeDetectorLike = {
+        detect: (source: HTMLVideoElement) => Promise<Array<{ rawValue: string }>>;
+    };
+
+    type BarcodeDetectorConstructor = new (options: { formats: string[] }) => BarcodeDetectorLike;
 
     const connectToPeer = (peerId: string) => {
         if (peerRef.current && !connections.current[peerId]) {
@@ -129,6 +167,66 @@ function App() {
             handleJoin(normalized);
         }
     }, []);
+
+    useEffect(() => {
+        if (!scanOpened) {
+            stopScan();
+            return;
+        }
+
+        let isActive = true;
+
+        const startScan = async () => {
+            setScanError('');
+            const BarcodeDetectorCtor = (window as Window & { BarcodeDetector?: BarcodeDetectorConstructor })
+                .BarcodeDetector;
+            if (!BarcodeDetectorCtor) {
+                setScanError('QR-Scan wird von diesem Browser nicht unterstützt.');
+                return;
+            }
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: { ideal: 'environment' } },
+                });
+                if (!isActive) return;
+                scanStreamRef.current = stream;
+                if (videoRef.current) {
+                    videoRef.current.srcObject = stream;
+                    await videoRef.current.play();
+                }
+                const detector = new BarcodeDetectorCtor({ formats: ['qr_code'] });
+                const scan = async () => {
+                    if (!videoRef.current || !isActive) return;
+                    try {
+                        const barcodes = await detector.detect(videoRef.current);
+                        if (barcodes.length > 0) {
+                            const roomCode = extractRoomCode(barcodes[0].rawValue);
+                            if (roomCode) {
+                                setRoomIdInput(roomCode);
+                                setScanOpened(false);
+                                handleJoin(roomCode);
+                                return;
+                            }
+                            setScanError('QR-Code enthält keine Raum-ID.');
+                        }
+                    } catch (error) {
+                        setScanError('QR-Code konnte nicht gelesen werden.');
+                    }
+                    scanFrameRef.current = requestAnimationFrame(scan);
+                };
+                scanFrameRef.current = requestAnimationFrame(scan);
+            } catch (error) {
+                setScanError('Kamera konnte nicht gestartet werden.');
+            }
+        };
+
+        startScan();
+
+        return () => {
+            isActive = false;
+            stopScan();
+        };
+    }, [scanOpened]);
 
     const setupConnection = (conn: Peer.DataConnection) => {
         conn.on('open', () => {
@@ -219,9 +317,6 @@ function App() {
             <Container size="xs" mt="xl">
                 <Title order={2} mb="md">Prüfungsaufsichts-Dashboard</Title>
                 <Stack>
-                    <Text>Gib deinen Namen ein:</Text>
-                    <TextInput value={nickname} onChange={(e) => setNickname(e.currentTarget.value)} />
-
                     <Divider my="sm" label="Raum beitreten" labelPosition="center" />
 
                     <TextInput
@@ -229,11 +324,37 @@ function App() {
                         value={roomIdInput}
                         onChange={(e) => setRoomIdInput(normalizeRoomCode(e.currentTarget.value))}
                     />
-                    <Button onClick={() => handleJoin(roomIdInput)}>Beitreten</Button>
+                    <Group grow>
+                        <Button onClick={() => handleJoin(roomIdInput)}>Beitreten</Button>
+                        <Button variant="light" onClick={() => setScanOpened(true)}>
+                            QR-Code scannen
+                        </Button>
+                    </Group>
 
                     <Divider my="sm" label="Oder neuen Link erstellen" labelPosition="center" />
                     <Button onClick={() => handleJoin()}>Eigenen Link erstellen</Button>
                 </Stack>
+                <Modal
+                    opened={scanOpened}
+                    onClose={() => setScanOpened(false)}
+                    title="QR-Code scannen"
+                    centered
+                >
+                    <Stack>
+                        <Text size="sm">Kamera auf den QR-Code mit dem Raum-Link richten.</Text>
+                        <video
+                            ref={videoRef}
+                            style={{ width: '100%', borderRadius: 8 }}
+                            muted
+                            playsInline
+                        />
+                        {scanError && (
+                            <Text size="sm" c="red">
+                                {scanError}
+                            </Text>
+                        )}
+                    </Stack>
+                </Modal>
             </Container>
         );
     }
@@ -278,6 +399,7 @@ function App() {
                         broadcast('chat', msg);
                     }}
                     nickname={nickname}
+                    onNicknameChange={setNickname}
                 />
                 <ProtocolTile
                     title="Protokoll"

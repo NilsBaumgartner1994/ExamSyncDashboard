@@ -13,6 +13,7 @@ interface ChatTileProps {
     messages: ChatMessage[];
     onSend: (msg: ChatMessage) => void;
     nickname: string;
+    onNicknameChange: (nickname: string) => void;
     defaultSpan?: number;
     onSpanChange?: (span: number) => void;
 }
@@ -22,6 +23,7 @@ export function ChatTile({
                              messages,
                              onSend,
                              nickname,
+                             onNicknameChange,
                              defaultSpan = 3,
                              onSpanChange,
                          }: ChatTileProps) {
@@ -29,7 +31,8 @@ export function ChatTile({
 
     const handleSend = () => {
         if (input.trim()) {
-            onSend({ user: nickname, text: input });
+            const displayName = nickname.trim() || 'Anonym';
+            onSend({ user: displayName, text: input });
             setInput('');
         }
     };
@@ -44,6 +47,12 @@ export function ChatTile({
                         </Text>
                     ))}
                 </ScrollArea>
+                <TextInput
+                    label="Dein Name"
+                    placeholder="Name eingeben"
+                    value={nickname}
+                    onChange={(e) => onNicknameChange(e.currentTarget.value)}
+                />
                 <TextInput
                     placeholder="Nachricht eingeben"
                     value={input}
