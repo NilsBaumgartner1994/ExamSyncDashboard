@@ -1,6 +1,6 @@
 // src/components/ToiletTile.tsx
-import React, { useMemo, useState } from 'react';
-import { ActionIcon, Button, Center, Group, Stack, Text, TextInput } from '@mantine/core';
+import React, { Fragment, useMemo, useState } from 'react';
+import { ActionIcon, Button, Center, Divider, Group, Stack, Text, TextInput } from '@mantine/core';
 import { IconEye, IconToiletPaper } from '@tabler/icons-react';
 import { TileWrapper } from './TileWrapper';
 
@@ -74,16 +74,21 @@ export function ToiletTile({
                                 <strong>Auf Toilette:</strong>
                             </Text>
                             {occupants.map((name, index) => (
-                                <Group key={`${name}-${index}`} justify="space-between" wrap="nowrap">
-                                    <Text fw={500}>{name}</Text>
-                                    <Button
-                                        color="green"
-                                        size="xs"
-                                        onClick={() => onRelease(name)}
-                                    >
-                                        Zurück
-                                    </Button>
-                                </Group>
+                                <Fragment key={`${name}-${index}`}>
+                                    <Group justify="space-between" wrap="nowrap">
+                                        <Text fw={500}>{name}</Text>
+                                        <Button
+                                            color="green"
+                                            size="xs"
+                                            onClick={() => onRelease(name)}
+                                        >
+                                            Zurück
+                                        </Button>
+                                    </Group>
+                                    {index < occupants.length - 1 && (
+                                        <Divider size="xs" />
+                                    )}
+                                </Fragment>
                             ))}
                         </Stack>
                     )}
