@@ -14,12 +14,12 @@ import {
     Loader,
     Center,
 } from '@mantine/core';
-import { TileWrapper } from './components/TileWrapper';
-import { BooleanTile } from './components/BooleanTile';
 import { TimerTile } from './components/TimerTile';
 import { LinkTile } from './components/LinkTile';
 import { StatusTile } from './components/StatusTile';
 import { ChatTile, ChatMessage } from './components/ChatTile';
+import { ProtocolTile } from './components/ProtocolTile';
+import { ToiletTile } from './components/ToiletTile';
 
 function App() {
     const [nickname, setNickname] = useState('Anonym');
@@ -28,11 +28,12 @@ function App() {
     const [joined, setJoined] = useState(false);
     const [connecting, setConnecting] = useState(false);
     const [connectionStatus, setConnectionStatus] = useState('');
-    const [toilet, setToilet] = useState(false);
+    const [toiletOccupant, setToiletOccupant] = useState<string | null>(null);
     const [examEnd, setExamEnd] = useState<Date | null>(null);
     const [tiles, setTiles] = useState<any>({});
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [connectedPeers, setConnectedPeers] = useState<string[]>([]);
+    const [protocolEntries, setProtocolEntries] = useState<string[]>([]);
     const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     const peerRef = useRef<Peer | null>(null);
@@ -43,6 +44,25 @@ function App() {
         Object.values(connections.current).forEach((conn) => {
             if (conn.open) conn.send(msg);
         });
+    };
+
+    const addProtocolEntry = (message: string) => {
+        const timestamp = new Date().toLocaleString('de-DE');
+        setProtocolEntries((prev) => [...prev, `${timestamp} - ${message}`]);
+    };
+
+    const exportProtocol = () => {
+        const content = protocolEntries.length > 0 ? protocolEntries.join('\n') : 'Keine Einträge vorhanden.';
+        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        link.href = url;
+        link.download = `protokoll-${timestamp}.txt`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
     };
 
     const connectToPeer = (peerId: string) => {
@@ -109,7 +129,6 @@ function App() {
                 conn.send(JSON.stringify({ type: 'known-peers', data: allPeers }));
             }
             broadcast('new-peer', conn.peer);
-            broadcast('toilet', toilet);
             broadcast('examEnd', examEnd);
             broadcast('tiles', tiles);
         });
@@ -117,10 +136,12 @@ function App() {
         conn.on('data', (data) => {
             try {
                 const msg = JSON.parse(data);
-                if (msg.type === 'toilet') setToilet(msg.data);
                 if (msg.type === 'examEnd') setExamEnd(new Date(msg.data));
                 if (msg.type === 'tiles') setTiles(msg.data);
-                if (msg.type === 'chat') setMessages((prev) => [...prev, msg.data]);
+                if (msg.type === 'chat') {
+                    setMessages((prev) => [...prev, msg.data]);
+                    addProtocolEntry(`Chat von ${msg.data.user}: ${msg.data.text}`);
+                }
 
                 if (msg.type === 'known-peers') {
                     const peerIds: string[] = msg.data;
@@ -211,16 +232,19 @@ function App() {
         <AppShell padding="md">
             <SimpleGrid cols={6} spacing="md">
                 <LinkTile title="Mein Raum-Link" roomId={roomId} />
-                <BooleanTile
+                <ToiletTile
                     title="Toilette"
-                    value={toilet}
-                    onToggle={() => {
-                        const newVal = !toilet;
-                        setToilet(newVal);
-                        broadcast('toilet', newVal);
+                    occupant={toiletOccupant}
+                    onOccupy={(name) => {
+                        setToiletOccupant(name);
+                        addProtocolEntry(`Toilette besetzt (${name})`);
                     }}
-                    onText="Toilette besetzt"
-                    offText="Toilette frei"
+                    onRelease={() => {
+                        if (toiletOccupant) {
+                            addProtocolEntry(`Toilette frei (${toiletOccupant} zurück)`);
+                        }
+                        setToiletOccupant(null);
+                    }}
                 />
                 <TimerTile
                     title="Klausurzeit"
@@ -236,9 +260,15 @@ function App() {
                     messages={messages}
                     onSend={(msg) => {
                         setMessages((prev) => [...prev, msg]);
+                        addProtocolEntry(`Chat von ${msg.user}: ${msg.text}`);
                         broadcast('chat', msg);
                     }}
                     nickname={nickname}
+                />
+                <ProtocolTile
+                    title="Protokoll"
+                    entries={protocolEntries}
+                    onExport={exportProtocol}
                 />
                 <StatusTile
                     title="Verbindung"
