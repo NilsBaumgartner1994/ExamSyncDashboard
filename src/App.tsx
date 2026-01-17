@@ -23,6 +23,7 @@ import { StatusTile } from './components/StatusTile';
 import { ChatTile, ChatMessage } from './components/ChatTile';
 import { ProtocolTile } from './components/ProtocolTile';
 import { ToiletTile } from './components/ToiletTile';
+import { NotesTile } from './components/NotesTile';
 import { formatRoomIdForDisplay, normalizeRoomCode } from './utils/roomCode';
 
 function App() {
@@ -38,6 +39,9 @@ function App() {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [connectedPeers, setConnectedPeers] = useState<string[]>([]);
     const [protocolEntries, setProtocolEntries] = useState<string[]>([]);
+    const [notesText, setNotesText] = useState('');
+    const [notesLockedBy, setNotesLockedBy] = useState<string | null>(null);
+    const [notesLockedByName, setNotesLockedByName] = useState<string | null>(null);
     const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const [scanOpened, setScanOpened] = useState(false);
     const [scanError, setScanError] = useState('');
@@ -52,9 +56,14 @@ function App() {
         });
     };
 
-    const addProtocolEntry = (message: string) => {
-        const timestamp = new Date().toLocaleString('de-DE');
-        setProtocolEntries((prev) => [...prev, `${timestamp} - ${message}`]);
+    const addProtocolEntry = (card: string, message: string) => {
+        const now = new Date();
+        const date = now.toLocaleDateString('de-DE');
+        const time = now.toLocaleTimeString('de-DE', {
+            hour: '2-digit',
+            minute: '2-digit',
+        });
+        setProtocolEntries((prev) => [...prev, `${date} - ${time} [${card}]: ${message}`]);
     };
 
     const exportProtocol = () => {
@@ -88,6 +97,40 @@ function App() {
             connections.current[peerId] = conn;
             setupConnection(conn);
         }
+    };
+
+    const sendNotesState = (conn?: Peer.DataConnection) => {
+        const payload = {
+            text: notesText,
+            lockedBy: notesLockedBy,
+            lockedByName: notesLockedByName,
+        };
+        if (conn) {
+            conn.send(JSON.stringify({ type: 'notes-state', data: payload }));
+        } else {
+            broadcast('notes-state', payload);
+        }
+    };
+
+    const handleNotesLock = (force = false) => {
+        const myId = peerRef.current?.id;
+        if (!myId) return;
+        if (notesLockedBy && notesLockedBy !== myId && !force) return;
+        const displayName = nickname.trim() || 'Anonym';
+        setNotesLockedBy(myId);
+        setNotesLockedByName(displayName);
+        sendNotesState();
+    };
+
+    const handleNotesSave = (nextText: string) => {
+        const myId = peerRef.current?.id;
+        if (!myId || notesLockedBy !== myId) return;
+        const displayName = nickname.trim() || 'Anonym';
+        setNotesText(nextText);
+        setNotesLockedBy(null);
+        setNotesLockedByName(null);
+        sendNotesState();
+        addProtocolEntry('Notizen', `Notizen gespeichert von ${displayName}`);
     };
 
     const handleJoin = (connectToCode?: string) => {
@@ -178,6 +221,7 @@ function App() {
             broadcast('new-peer', conn.peer);
             broadcast('examEnd', examEnd);
             broadcast('tiles', tiles);
+            sendNotesState(conn);
         });
 
         conn.on('data', (data) => {
@@ -187,7 +231,12 @@ function App() {
                 if (msg.type === 'tiles') setTiles(msg.data);
                 if (msg.type === 'chat') {
                     setMessages((prev) => [...prev, msg.data]);
-                    addProtocolEntry(`Chat von ${msg.data.user}: ${msg.data.text}`);
+                    addProtocolEntry('Chat', `von ${msg.data.user}: ${msg.data.text}`);
+                }
+                if (msg.type === 'notes-state') {
+                    setNotesText(msg.data.text ?? '');
+                    setNotesLockedBy(msg.data.lockedBy ?? null);
+                    setNotesLockedByName(msg.data.lockedByName ?? null);
                 }
 
                 if (msg.type === 'known-peers') {
@@ -315,7 +364,7 @@ function App() {
                     occupants={toiletOccupants}
                     onOccupy={(name) => {
                         setToiletOccupants((prev) => [...prev, name]);
-                        addProtocolEntry(`Toilette besetzt (${name})`);
+                        addProtocolEntry('Toilette', `besetzt (${name})`);
                     }}
                     onRelease={(name) => {
                         setToiletOccupants((prev) => {
@@ -325,7 +374,7 @@ function App() {
                             next.splice(index, 1);
                             return next;
                         });
-                        addProtocolEntry(`Toilette frei (${name} zurück)`);
+                        addProtocolEntry('Toilette', `frei (${name} zurück)`);
                     }}
                 />
                 <TimerTile
@@ -342,11 +391,21 @@ function App() {
                     messages={messages}
                     onSend={(msg) => {
                         setMessages((prev) => [...prev, msg]);
-                        addProtocolEntry(`Chat von ${msg.user}: ${msg.text}`);
+                        addProtocolEntry('Chat', `von ${msg.user}: ${msg.text}`);
                         broadcast('chat', msg);
                     }}
                     nickname={nickname}
                     onNicknameChange={setNickname}
+                />
+                <NotesTile
+                    title="Notizen"
+                    text={notesText}
+                    lockedBy={notesLockedBy}
+                    lockedByName={notesLockedByName}
+                    myPeerId={peerRef.current?.id}
+                    onRequestLock={() => handleNotesLock(false)}
+                    onForceLock={() => handleNotesLock(true)}
+                    onSave={handleNotesSave}
                 />
                 <ProtocolTile
                     title="Protokoll"
