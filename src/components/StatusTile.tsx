@@ -2,6 +2,7 @@
 import React from 'react';
 import { Badge, Stack, Text } from '@mantine/core';
 import { TileWrapper } from './TileWrapper';
+import { formatRoomIdForDisplay } from '../utils/roomCode';
 
 interface StatusTileProps {
     title: string;
@@ -21,10 +22,15 @@ export function StatusTile({
     return (
         <TileWrapper title={title} defaultSpan={defaultSpan} onSpanChange={onSpanChange}>
             <Stack>
-                <Text><strong>Eigene ID:</strong> {peerId || 'Nicht verbunden'}</Text>
+                <Text>
+                    <strong>Eigene ID:</strong>{' '}
+                    {peerId ? formatRoomIdForDisplay(peerId) : 'Nicht verbunden'}
+                </Text>
                 <Text><strong>Verbunden mit:</strong></Text>
                 {connectedPeers.length > 0 ? (
-                    connectedPeers.map((pid, i) => <Badge key={i}>{pid}</Badge>)
+                    connectedPeers.map((pid, i) => (
+                        <Badge key={i}>{formatRoomIdForDisplay(pid)}</Badge>
+                    ))
                 ) : (
                     <Text>Keine weiteren Peers verbunden</Text>
                 )}
