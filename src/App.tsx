@@ -20,11 +20,13 @@ import { StatusTile } from './components/StatusTile';
 import { ChatTile, ChatMessage } from './components/ChatTile';
 import { ProtocolTile } from './components/ProtocolTile';
 import { ToiletTile } from './components/ToiletTile';
+import { decodeRoomCode, encodeRoomId, normalizeRoomCode } from './utils/roomCode';
 
 function App() {
     const [nickname, setNickname] = useState('Anonym');
     const [roomIdInput, setRoomIdInput] = useState('');
     const [roomId, setRoomId] = useState('');
+    const [roomCode, setRoomCode] = useState('');
     const [joined, setJoined] = useState(false);
     const [connecting, setConnecting] = useState(false);
     const [connectionStatus, setConnectionStatus] = useState('');
@@ -73,14 +75,20 @@ function App() {
         }
     };
 
-    const handleJoin = (connectToId?: string) => {
+    const handleJoin = (connectToCode?: string) => {
+        const normalizedCode = connectToCode ? normalizeRoomCode(connectToCode) : '';
+        const connectToId = normalizedCode ? decodeRoomCode(normalizedCode) : undefined;
+        if (normalizedCode && !connectToId) {
+            alert('Ungültiger Raum-Code. Bitte nur die erlaubten Buchstaben ohne O und I verwenden.');
+            return;
+        }
         const myPeerId = `${Date.now()}`;
         const peer = new Peer(myPeerId);
         peerRef.current = peer;
 
         if (connectToId) {
             setConnecting(true);
-            setConnectionStatus(`Verbindung mit Peer ${connectToId} wird aufgebaut...`);
+            setConnectionStatus(`Verbindung mit Raum-Code ${normalizedCode} wird aufgebaut...`);
             connectionTimeoutRef.current = setTimeout(() => {
                 setConnecting(false);
                 setConnectionStatus('');
@@ -94,6 +102,7 @@ function App() {
 
         peer.on('open', (id) => {
             setRoomId(id);
+            setRoomCode(encodeRoomId(id));
             if (!connectToId) {
                 setJoined(true);
                 window.history.replaceState({}, document.title, window.location.pathname);
@@ -115,8 +124,9 @@ function App() {
         const params = new URLSearchParams(window.location.search);
         const roomParam = params.get('roomId') ?? params.get('peerId');
         if (roomParam) {
-            setRoomIdInput(roomParam);
-            handleJoin(roomParam);
+            const normalized = normalizeRoomCode(roomParam);
+            setRoomIdInput(normalized);
+            handleJoin(normalized);
         }
     }, []);
 
@@ -215,9 +225,9 @@ function App() {
                     <Divider my="sm" label="Raum beitreten" labelPosition="center" />
 
                     <TextInput
-                        placeholder="Peer-ID eingeben"
+                        placeholder="Raum-Code eingeben"
                         value={roomIdInput}
-                        onChange={(e) => setRoomIdInput(e.currentTarget.value)}
+                        onChange={(e) => setRoomIdInput(normalizeRoomCode(e.currentTarget.value))}
                     />
                     <Button onClick={() => handleJoin(roomIdInput)}>Beitreten</Button>
 
@@ -231,7 +241,7 @@ function App() {
     return (
         <AppShell padding="md">
             <SimpleGrid cols={6} spacing="md">
-                <LinkTile title="Mein Raum-Link" roomId={roomId} />
+                <LinkTile title="Mein Raum-Link" roomId={roomCode} />
                 <ToiletTile
                     title="Toilette"
                     occupants={toiletOccupants}
@@ -276,8 +286,8 @@ function App() {
                 />
                 <StatusTile
                     title="Verbindung"
-                    peerId={peerRef.current?.id}
-                    connectedPeers={connectedPeers}
+                    peerId={peerRef.current?.id ? encodeRoomId(peerRef.current.id) : undefined}
+                    connectedPeers={connectedPeers.map((peerId) => encodeRoomId(peerId))}
                 />
             </SimpleGrid>
         </AppShell>
