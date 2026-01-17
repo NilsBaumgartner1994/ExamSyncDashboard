@@ -1,7 +1,7 @@
 // src/components/RoomStatusTile.tsx
 import React, { Fragment, useMemo, useState } from 'react';
 import { ActionIcon, Button, Divider, Group, Stack, Text, TextInput, Box } from '@mantine/core';
-import { IconBell, IconTrash } from '@tabler/icons-react';
+import { IconBell, IconCheck, IconTrash } from '@tabler/icons-react';
 import { keyframes } from '@emotion/react';
 import { TileWrapper } from './TileWrapper';
 
@@ -15,6 +15,7 @@ interface RoomStatusTileProps {
     rooms: RoomStatus[];
     onAddRoom: (name: string) => void;
     onToggleHelp: (name: string) => void;
+    onClearHelp: (name: string) => void;
     onRemoveRoom: (name: string) => void;
     defaultSpan?: number;
     onSpanChange?: (span: number) => void;
@@ -35,6 +36,7 @@ export function RoomStatusTile({
     rooms,
     onAddRoom,
     onToggleHelp,
+    onClearHelp,
     onRemoveRoom,
     defaultSpan = 2,
     onSpanChange,
@@ -85,6 +87,15 @@ export function RoomStatusTile({
                                 >
                                     <IconBell size={18} />
                                 </ActionIcon>
+                                <ActionIcon
+                                    size="lg"
+                                    variant="light"
+                                    color="green"
+                                    aria-label="Hilfe erledigt"
+                                    onClick={() => onClearHelp(room.name)}
+                                >
+                                    <IconCheck size={18} />
+                                </ActionIcon>
                                 <Button
                                     size="xs"
                                     color="red"
@@ -100,7 +111,7 @@ export function RoomStatusTile({
                     </Fragment>
                 );
             }),
-        [rooms, onToggleHelp, onRemoveRoom],
+        [rooms, onToggleHelp, onClearHelp, onRemoveRoom],
     );
 
     return (

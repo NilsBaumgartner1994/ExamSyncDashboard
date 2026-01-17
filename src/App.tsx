@@ -450,6 +450,17 @@ function App() {
                                 return next;
                             });
                         }}
+                        onClearHelp={(name) => {
+                            setRoomStatuses((prev) => {
+                                const next = prev.map((room) =>
+                                    room.name === name
+                                        ? { ...room, needsHelp: false }
+                                        : room,
+                                );
+                                broadcastRoomStatuses(next);
+                                return next;
+                            });
+                        }}
                         onRemoveRoom={(name) => {
                             setRoomStatuses((prev) => {
                                 const next = prev.filter((room) => room.name !== name);
