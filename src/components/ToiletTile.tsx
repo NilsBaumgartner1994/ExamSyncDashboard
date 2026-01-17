@@ -1,6 +1,6 @@
 // src/components/ToiletTile.tsx
 import React, { useMemo, useState } from 'react';
-import { ActionIcon, Button, Center, Stack, Text, TextInput } from '@mantine/core';
+import { ActionIcon, Button, Center, Group, Stack, Text, TextInput } from '@mantine/core';
 import { IconEye, IconToiletPaper } from '@tabler/icons-react';
 import { TileWrapper } from './TileWrapper';
 
@@ -8,16 +8,16 @@ type ToiletViewMode = 'admin' | 'exam';
 
 interface ToiletTileProps {
     title: string;
-    occupant: string | null;
+    occupants: string[];
     onOccupy: (name: string) => void;
-    onRelease: () => void;
+    onRelease: (name: string) => void;
     defaultSpan?: number;
     onSpanChange?: (span: number) => void;
 }
 
 export function ToiletTile({
                                title,
-                               occupant,
+                               occupants,
                                onOccupy,
                                onRelease,
                                defaultSpan = 2,
@@ -25,7 +25,8 @@ export function ToiletTile({
                            }: ToiletTileProps) {
     const [viewMode, setViewMode] = useState<ToiletViewMode>('admin');
     const [nameInput, setNameInput] = useState('');
-    const isOccupied = Boolean(occupant);
+    const isOccupied = occupants.length > 0;
+    const statusLabel = isOccupied ? `Besetzt (${occupants.length})` : 'Frei';
 
     const examCardStyle = useMemo(() => {
         if (viewMode !== 'exam') return undefined;
@@ -62,33 +63,39 @@ export function ToiletTile({
                 <Center>
                     <Stack align="center" gap="xs">
                         <IconToiletPaper size={48} />
-                        <Text fw={600}>{isOccupied ? 'Besetzt' : 'Frei'}</Text>
+                        <Text fw={600}>{statusLabel}</Text>
                     </Stack>
                 </Center>
             ) : (
                 <Stack>
-                    {isOccupied ? (
-                        <>
+                    {isOccupied && (
+                        <Stack gap="xs">
                             <Text ta="center">
-                                <strong>Auf Toilette:</strong> {occupant}
+                                <strong>Auf Toilette:</strong>
                             </Text>
-                            <Button color="green" onClick={onRelease} fullWidth>
-                                Person zurück
-                            </Button>
-                        </>
-                    ) : (
-                        <>
-                            <TextInput
-                                placeholder="Name eingeben"
-                                value={nameInput}
-                                onChange={(event) => setNameInput(event.currentTarget.value)}
-                                onKeyDown={(event) => event.key === 'Enter' && handleOccupy()}
-                            />
-                            <Button onClick={handleOccupy} disabled={!nameInput.trim()} fullWidth>
-                                Auf Toilette eintragen
-                            </Button>
-                        </>
+                            {occupants.map((name, index) => (
+                                <Group key={`${name}-${index}`} justify="space-between" wrap="nowrap">
+                                    <Text fw={500}>{name}</Text>
+                                    <Button
+                                        color="green"
+                                        size="xs"
+                                        onClick={() => onRelease(name)}
+                                    >
+                                        Zurück
+                                    </Button>
+                                </Group>
+                            ))}
+                        </Stack>
                     )}
+                    <TextInput
+                        placeholder="Name eingeben"
+                        value={nameInput}
+                        onChange={(event) => setNameInput(event.currentTarget.value)}
+                        onKeyDown={(event) => event.key === 'Enter' && handleOccupy()}
+                    />
+                    <Button onClick={handleOccupy} disabled={!nameInput.trim()} fullWidth>
+                        Auf Toilette eintragen
+                    </Button>
                 </Stack>
             )}
         </TileWrapper>

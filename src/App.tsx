@@ -28,7 +28,7 @@ function App() {
     const [joined, setJoined] = useState(false);
     const [connecting, setConnecting] = useState(false);
     const [connectionStatus, setConnectionStatus] = useState('');
-    const [toiletOccupant, setToiletOccupant] = useState<string | null>(null);
+    const [toiletOccupants, setToiletOccupants] = useState<string[]>([]);
     const [examEnd, setExamEnd] = useState<Date | null>(null);
     const [tiles, setTiles] = useState<any>({});
     const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -234,16 +234,20 @@ function App() {
                 <LinkTile title="Mein Raum-Link" roomId={roomId} />
                 <ToiletTile
                     title="Toilette"
-                    occupant={toiletOccupant}
+                    occupants={toiletOccupants}
                     onOccupy={(name) => {
-                        setToiletOccupant(name);
+                        setToiletOccupants((prev) => [...prev, name]);
                         addProtocolEntry(`Toilette besetzt (${name})`);
                     }}
-                    onRelease={() => {
-                        if (toiletOccupant) {
-                            addProtocolEntry(`Toilette frei (${toiletOccupant} zurück)`);
-                        }
-                        setToiletOccupant(null);
+                    onRelease={(name) => {
+                        setToiletOccupants((prev) => {
+                            const index = prev.indexOf(name);
+                            if (index === -1) return prev;
+                            const next = [...prev];
+                            next.splice(index, 1);
+                            return next;
+                        });
+                        addProtocolEntry(`Toilette frei (${name} zurück)`);
                     }}
                 />
                 <TimerTile
