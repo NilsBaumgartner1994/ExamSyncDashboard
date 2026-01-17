@@ -1,6 +1,6 @@
 // src/components/TimerTile.tsx
 import React, { useEffect, useState } from 'react';
-import { Button, Stack, Text, TextInput } from '@mantine/core';
+import { Button, Group, Stack, Text, TextInput } from '@mantine/core';
 import { TileWrapper } from './TileWrapper';
 
 interface TimerTileProps {
@@ -40,16 +40,35 @@ export function TimerTile({
         }
     };
 
+    const quickMinutes = [30, 40, 60, 70, 90];
+
     return (
         <TileWrapper title={title} defaultSpan={defaultSpan} onSpanChange={onSpanChange}>
             <Stack>
                 <Text ta="center">Restzeit: {remaining}</Text>
+                <Group gap="xs" justify="center">
+                    {quickMinutes.map((minutes) => (
+                        <Button
+                            key={minutes}
+                            size="xs"
+                            variant="light"
+                            onClick={() => {
+                                onSetMinutes(minutes);
+                                setInput('');
+                            }}
+                        >
+                            {minutes}m
+                        </Button>
+                    ))}
+                </Group>
                 <TextInput
                     placeholder="Minuten eingeben"
                     value={input}
                     onChange={(e) => setInput(e.currentTarget.value)}
                     inputMode="numeric"
                     pattern="[0-9]*"
+                    type="number"
+                    min={1}
                 />
                 <Button onClick={handleSet}>Klausurzeit setzen</Button>
             </Stack>
