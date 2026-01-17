@@ -16,6 +16,7 @@ import {
     Modal,
     Group,
 } from '@mantine/core';
+import { BrowserQRCodeReader, type IScannerControls } from '@zxing/browser';
 import { TimerTile } from './components/TimerTile';
 import { LinkTile } from './components/LinkTile';
 import { StatusTile } from './components/StatusTile';
@@ -42,8 +43,7 @@ function App() {
     const [scanOpened, setScanOpened] = useState(false);
     const [scanError, setScanError] = useState('');
     const videoRef = useRef<HTMLVideoElement | null>(null);
-    const scanStreamRef = useRef<MediaStream | null>(null);
-    const scanFrameRef = useRef<number | null>(null);
+    const scanControlsRef = useRef<IScannerControls | null>(null);
 
     const peerRef = useRef<Peer | null>(null);
     const connections = useRef<Record<string, Peer.DataConnection>>({});
@@ -86,24 +86,12 @@ function App() {
     };
 
     const stopScan = () => {
-        if (scanFrameRef.current) {
-            cancelAnimationFrame(scanFrameRef.current);
-            scanFrameRef.current = null;
-        }
-        if (scanStreamRef.current) {
-            scanStreamRef.current.getTracks().forEach((track) => track.stop());
-            scanStreamRef.current = null;
-        }
+        scanControlsRef.current?.stop();
+        scanControlsRef.current = null;
         if (videoRef.current) {
             videoRef.current.srcObject = null;
         }
     };
-
-    type BarcodeDetectorLike = {
-        detect: (source: HTMLVideoElement) => Promise<Array<{ rawValue: string }>>;
-    };
-
-    type BarcodeDetectorConstructor = new (options: { formats: string[] }) => BarcodeDetectorLike;
 
     const connectToPeer = (peerId: string) => {
         if (peerRef.current && !connections.current[peerId]) {
@@ -178,43 +166,32 @@ function App() {
 
         const startScan = async () => {
             setScanError('');
-            const BarcodeDetectorCtor = (window as Window & { BarcodeDetector?: BarcodeDetectorConstructor })
-                .BarcodeDetector;
-            if (!BarcodeDetectorCtor) {
-                setScanError('QR-Scan wird von diesem Browser nicht unterstützt.');
+            if (!videoRef.current) {
+                setScanError('Videoelement konnte nicht gestartet werden.');
                 return;
             }
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: { ideal: 'environment' } },
-                });
-                if (!isActive) return;
-                scanStreamRef.current = stream;
-                if (videoRef.current) {
-                    videoRef.current.srcObject = stream;
-                    await videoRef.current.play();
-                }
-                const detector = new BarcodeDetectorCtor({ formats: ['qr_code'] });
-                const scan = async () => {
-                    if (!videoRef.current || !isActive) return;
-                    try {
-                        const barcodes = await detector.detect(videoRef.current);
-                        if (barcodes.length > 0) {
-                            const roomCode = extractRoomCode(barcodes[0].rawValue);
+                const reader = new BrowserQRCodeReader();
+                scanControlsRef.current = await reader.decodeFromConstraints(
+                    { video: { facingMode: { ideal: 'environment' } } },
+                    videoRef.current,
+                    (result, error) => {
+                        if (!isActive) return;
+                        if (result) {
+                            const roomCode = extractRoomCode(result.getText());
                             if (roomCode) {
+                                stopScan();
                                 setRoomIdInput(roomCode);
                                 setScanOpened(false);
                                 handleJoin(roomCode);
                                 return;
                             }
                             setScanError('QR-Code enthält keine Raum-ID.');
+                        } else if (error && error.name !== 'NotFoundException') {
+                            setScanError('QR-Code konnte nicht gelesen werden.');
                         }
-                    } catch (error) {
-                        setScanError('QR-Code konnte nicht gelesen werden.');
-                    }
-                    scanFrameRef.current = requestAnimationFrame(scan);
-                };
-                scanFrameRef.current = requestAnimationFrame(scan);
+                    },
+                );
             } catch (error) {
                 setScanError('Kamera konnte nicht gestartet werden.');
             }
