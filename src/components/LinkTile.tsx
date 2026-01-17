@@ -11,9 +11,10 @@ interface LinkTileProps {
     roomId: string;
     defaultSpan?: number;
     onSpanChange?: (span: number) => void;
+    onClose?: () => void;
 }
 
-export function LinkTile({ title, roomId, defaultSpan = 2, onSpanChange }: LinkTileProps) {
+export function LinkTile({ title, roomId, defaultSpan = 2, onSpanChange, onClose }: LinkTileProps) {
     const [revealed, setRevealed] = useState(false);
     const [qrCodeUrl, setQrCodeUrl] = useState('');
     const normalizedRoomId = normalizeRoomCode(roomId);
@@ -44,7 +45,12 @@ export function LinkTile({ title, roomId, defaultSpan = 2, onSpanChange }: LinkT
     };
 
     return (
-        <TileWrapper title={title} defaultSpan={defaultSpan} onSpanChange={onSpanChange}>
+        <TileWrapper
+            title={title}
+            defaultSpan={defaultSpan}
+            onSpanChange={onSpanChange}
+            onClose={onClose}
+        >
             <Stack align="center">
                 {!revealed ? (
                     <Button onClick={() => setRevealed(true)}>Raum-Link anzeigen</Button>

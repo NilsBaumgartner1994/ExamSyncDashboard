@@ -15,6 +15,7 @@ interface NotesTileProps {
     onSave: (nextText: string) => void;
     defaultSpan?: number;
     onSpanChange?: (span: number) => void;
+    onClose?: () => void;
 }
 
 export function NotesTile({
@@ -28,6 +29,7 @@ export function NotesTile({
                               onSave,
                               defaultSpan = 3,
                               onSpanChange,
+                              onClose,
                           }: NotesTileProps) {
     const [draft, setDraft] = useState(text);
     const [showForcePrompt, setShowForcePrompt] = useState(false);
@@ -104,6 +106,7 @@ export function NotesTile({
             defaultSpan={defaultSpan}
             onSpanChange={onSpanChange}
             headerActions={headerActions}
+            onClose={onClose}
         >
             <Stack>
                 {lockedBy && (

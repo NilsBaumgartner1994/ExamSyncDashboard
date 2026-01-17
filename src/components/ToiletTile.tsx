@@ -13,6 +13,7 @@ interface ToiletTileProps {
     onRelease: (name: string) => void;
     defaultSpan?: number;
     onSpanChange?: (span: number) => void;
+    onClose?: () => void;
 }
 
 export function ToiletTile({
@@ -22,6 +23,7 @@ export function ToiletTile({
                                onRelease,
                                defaultSpan = 2,
                                onSpanChange,
+                               onClose,
                            }: ToiletTileProps) {
     const [viewMode, setViewMode] = useState<ToiletViewMode>('admin');
     const [nameInput, setNameInput] = useState('');
@@ -49,6 +51,7 @@ export function ToiletTile({
             defaultSpan={defaultSpan}
             onSpanChange={onSpanChange}
             cardStyle={examCardStyle}
+            onClose={onClose}
             headerActions={(
                 <ActionIcon
                     onClick={() => setViewMode((prev) => (prev === 'admin' ? 'exam' : 'admin'))}

@@ -2,7 +2,7 @@
 import React, { ReactNode, useState } from 'react';
 import { Card, Group, Text, ActionIcon, Collapse, useMantineTheme } from '@mantine/core';
 import { useMediaQuery } from '@mantine/hooks';
-import { IconMinus, IconPlus, IconChevronDown, IconChevronUp } from "@tabler/icons-react";
+import { IconMinus, IconPlus, IconChevronDown, IconChevronUp, IconX } from "@tabler/icons-react";
 
 interface TileWrapperProps {
     title: string;
@@ -11,6 +11,7 @@ interface TileWrapperProps {
     onSpanChange?: (span: number) => void;
     headerActions?: ReactNode;
     cardStyle?: React.CSSProperties;
+    onClose?: () => void;
 }
 
 export function TileWrapper({
@@ -20,6 +21,7 @@ export function TileWrapper({
                                 onSpanChange,
                                 headerActions,
                                 cardStyle,
+                                onClose,
                             }: TileWrapperProps) {
     const [collapsed, setCollapsed] = useState(false);
     const [span, setSpan] = useState(defaultSpan);
@@ -45,6 +47,16 @@ export function TileWrapper({
                     <ActionIcon onClick={() => changeSpan(-1)} variant="light"><IconMinus size={16} /></ActionIcon>
                     <ActionIcon onClick={() => changeSpan(1)} variant="light"><IconPlus size={16} /></ActionIcon>
                     {headerActions}
+                    {onClose && (
+                        <ActionIcon
+                            onClick={onClose}
+                            variant="light"
+                            color="red"
+                            aria-label="Karte schließen"
+                        >
+                            <IconX size={16} />
+                        </ActionIcon>
+                    )}
                     <ActionIcon onClick={() => setCollapsed((c) => !c)} variant="light">
                         {collapsed ? <IconChevronDown size={16} /> : <IconChevronUp size={16} />}
                     </ActionIcon>

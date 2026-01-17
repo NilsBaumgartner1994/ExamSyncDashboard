@@ -10,6 +10,7 @@ interface StatusTileProps {
     connectedPeers: string[];
     defaultSpan?: number;
     onSpanChange?: (span: number) => void;
+    onClose?: () => void;
 }
 
 export function StatusTile({
@@ -18,9 +19,15 @@ export function StatusTile({
                                connectedPeers,
                                defaultSpan = 2,
                                onSpanChange,
+                               onClose,
                            }: StatusTileProps) {
     return (
-        <TileWrapper title={title} defaultSpan={defaultSpan} onSpanChange={onSpanChange}>
+        <TileWrapper
+            title={title}
+            defaultSpan={defaultSpan}
+            onSpanChange={onSpanChange}
+            onClose={onClose}
+        >
             <Stack>
                 <Text>
                     <strong>Eigene ID:</strong>{' '}
