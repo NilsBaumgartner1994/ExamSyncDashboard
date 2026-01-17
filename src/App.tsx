@@ -16,7 +16,7 @@ import {
     Modal,
     Group,
 } from '@mantine/core';
-import { BrowserQRCodeReader, type IScannerControls } from '@zxing/browser';
+import QrScanner from 'qr-scanner';
 import { TimerTile } from './components/TimerTile';
 import { LinkTile } from './components/LinkTile';
 import { StatusTile } from './components/StatusTile';
@@ -24,6 +24,8 @@ import { ChatTile, ChatMessage } from './components/ChatTile';
 import { ProtocolTile } from './components/ProtocolTile';
 import { ToiletTile } from './components/ToiletTile';
 import { decodeRoomCode, encodeRoomId, normalizeRoomCode } from './utils/roomCode';
+
+QrScanner.WORKER_PATH = new URL('qr-scanner/qr-scanner-worker.min.js', import.meta.url).toString();
 
 function App() {
     const [nickname, setNickname] = useState('Anonym');
@@ -43,7 +45,7 @@ function App() {
     const [scanOpened, setScanOpened] = useState(false);
     const [scanError, setScanError] = useState('');
     const videoRef = useRef<HTMLVideoElement | null>(null);
-    const scanControlsRef = useRef<IScannerControls | null>(null);
+    const scannerRef = useRef<QrScanner | null>(null);
 
     const peerRef = useRef<Peer | null>(null);
     const connections = useRef<Record<string, Peer.DataConnection>>({});
@@ -86,8 +88,9 @@ function App() {
     };
 
     const stopScan = () => {
-        scanControlsRef.current?.stop();
-        scanControlsRef.current = null;
+        scannerRef.current?.stop();
+        scannerRef.current?.destroy();
+        scannerRef.current = null;
         if (videoRef.current) {
             videoRef.current.srcObject = null;
         }
@@ -171,27 +174,33 @@ function App() {
                 return;
             }
             try {
-                const reader = new BrowserQRCodeReader();
-                scanControlsRef.current = await reader.decodeFromConstraints(
-                    { video: { facingMode: { ideal: 'environment' } } },
+                const hasCamera = await QrScanner.hasCamera();
+                if (!hasCamera) {
+                    setScanError('Keine Kamera verfügbar.');
+                    return;
+                }
+
+                const scanner = new QrScanner(
                     videoRef.current,
-                    (result, error) => {
+                    (result) => {
                         if (!isActive) return;
-                        if (result) {
-                            const roomCode = extractRoomCode(result.getText());
-                            if (roomCode) {
-                                stopScan();
-                                setRoomIdInput(roomCode);
-                                setScanOpened(false);
-                                handleJoin(roomCode);
-                                return;
-                            }
-                            setScanError('QR-Code enthält keine Raum-ID.');
-                        } else if (error && error.name !== 'NotFoundException') {
-                            setScanError('QR-Code konnte nicht gelesen werden.');
+                        const roomCode = extractRoomCode(result.data);
+                        if (roomCode) {
+                            stopScan();
+                            setRoomIdInput(roomCode);
+                            setScanOpened(false);
+                            handleJoin(roomCode);
+                            return;
                         }
+                        setScanError('QR-Code enthält keine Raum-ID.');
+                    },
+                    {
+                        preferredCamera: 'environment',
+                        returnDetailedScanResult: true,
                     },
                 );
+                scannerRef.current = scanner;
+                await scanner.start();
             } catch (error) {
                 setScanError('Kamera konnte nicht gestartet werden.');
             }
