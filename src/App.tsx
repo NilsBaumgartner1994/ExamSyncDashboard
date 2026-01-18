@@ -77,6 +77,16 @@ function App() {
         });
     };
 
+    const sendToHost = (type: string, data: any) => {
+        if (!hostPeerId) return;
+        const conn = connections.current[hostPeerId];
+        if (conn?.open) {
+            conn.send(JSON.stringify({ type, data }));
+            return;
+        }
+        broadcast(type, data);
+    };
+
     const addProtocolEntry = (card: string, message: string) => {
         const now = new Date();
         const date = now.toLocaleDateString('de-DE');
@@ -121,6 +131,7 @@ function App() {
     };
 
     const sendNotesState = (conn?: Peer.DataConnection) => {
+        if (!isHost) return;
         const payload = {
             text: notesText,
             lockedBy: notesLockedBy,
@@ -134,28 +145,108 @@ function App() {
     };
 
     const broadcastRoomStatuses = (nextStatuses: RoomStatus[]) => {
+        if (!isHost) return;
         broadcast('room-status', nextStatuses);
+    };
+
+    const applyRoomAdd = (name: string) => {
+        setRoomStatuses((prev) => {
+            if (prev.some((room) => room.name === name)) return prev;
+            const next = [...prev, { name, needsHelp: false, isResolved: false }];
+            broadcastRoomStatuses(next);
+            addProtocolEntry('Raum-Status', `Raum ${name} hinzugefügt`);
+            return next;
+        });
+    };
+
+    const applyRoomToggleHelp = (name: string) => {
+        setRoomStatuses((prev) => {
+            const target = prev.find((room) => room.name === name);
+            if (!target) return prev;
+            const nextNeedsHelp = !target.needsHelp;
+            const next = prev.map((room) =>
+                room.name === name
+                    ? { ...room, needsHelp: nextNeedsHelp, isResolved: false }
+                    : room,
+            );
+            broadcastRoomStatuses(next);
+            addProtocolEntry(
+                'Raum-Status',
+                `${name}: ${nextNeedsHelp ? 'Hilfe angefordert' : 'Hilfe zurückgenommen'}`,
+            );
+            return next;
+        });
+    };
+
+    const applyRoomClearHelp = (name: string) => {
+        setRoomStatuses((prev) => {
+            const target = prev.find((room) => room.name === name);
+            if (!target) return prev;
+            const next = prev.map((room) =>
+                room.name === name
+                    ? { ...room, needsHelp: false, isResolved: true }
+                    : room,
+            );
+            broadcastRoomStatuses(next);
+            addProtocolEntry('Raum-Status', `${name}: Hilfe erledigt`);
+            return next;
+        });
+    };
+
+    const applyRoomReset = (name: string) => {
+        setRoomStatuses((prev) => {
+            const target = prev.find((room) => room.name === name);
+            if (!target) return prev;
+            const next = prev.map((room) =>
+                room.name === name
+                    ? { ...room, needsHelp: false, isResolved: false }
+                    : room,
+            );
+            broadcastRoomStatuses(next);
+            addProtocolEntry('Raum-Status', `${name}: Status zurückgesetzt`);
+            return next;
+        });
+    };
+
+    const applyRoomRemove = (name: string) => {
+        setRoomStatuses((prev) => {
+            const target = prev.find((room) => room.name === name);
+            if (!target) return prev;
+            const next = prev.filter((room) => room.name !== name);
+            broadcastRoomStatuses(next);
+            addProtocolEntry('Raum-Status', `Raum ${name} entfernt`);
+            return next;
+        });
     };
 
     const handleNotesLock = (force = false) => {
         const myId = peerRef.current?.id;
         if (!myId) return;
-        if (notesLockedBy && notesLockedBy !== myId && !force) return;
         const displayName = nickname.trim() || 'Anonym';
-        setNotesLockedBy(myId);
-        setNotesLockedByName(displayName);
-        sendNotesState();
+        if (isHost) {
+            if (notesLockedBy && notesLockedBy !== myId && !force) return;
+            setNotesLockedBy(myId);
+            setNotesLockedByName(displayName);
+            sendNotesState();
+            return;
+        }
+        sendToHost('notes-lock-request', { force, name: displayName });
     };
 
     const handleNotesSave = (nextText: string) => {
         const myId = peerRef.current?.id;
-        if (!myId || notesLockedBy !== myId) return;
+        if (!myId) return;
         const displayName = nickname.trim() || 'Anonym';
-        setNotesText(nextText);
-        setNotesLockedBy(null);
-        setNotesLockedByName(null);
-        sendNotesState();
-        addProtocolEntry('Notizen', `Notizen gespeichert von ${displayName}`);
+        if (isHost) {
+            if (notesLockedBy !== myId) return;
+            setNotesText(nextText);
+            setNotesLockedBy(null);
+            setNotesLockedByName(null);
+            sendNotesState();
+            addProtocolEntry('Notizen', `Notizen gespeichert von ${displayName}`);
+            return;
+        }
+        sendToHost('notes-save-request', { text: nextText, name: displayName });
     };
 
     const handleJoin = (connectToCode?: string) => {
@@ -270,17 +361,17 @@ function App() {
                 conn.send(JSON.stringify({ type: 'known-peers', data: allPeers }));
             }
             broadcast('new-peer', conn.peer);
-            broadcast('examEnd', examEnd);
-            broadcast('examWarningMinutes', examWarningMinutes);
-            broadcast('tiles', tiles);
-            conn.send(JSON.stringify({ type: 'toilet-blocked', data: toiletBlocked }));
-            conn.send(JSON.stringify({ type: 'toilet-occupants', data: toiletOccupants }));
             if (isHost) {
+                broadcast('examEnd', examEnd);
+                broadcast('examWarningMinutes', examWarningMinutes);
+                broadcast('tiles', tiles);
+                conn.send(JSON.stringify({ type: 'toilet-blocked', data: toiletBlocked }));
+                conn.send(JSON.stringify({ type: 'toilet-occupants', data: toiletOccupants }));
                 conn.send(JSON.stringify({ type: 'room-status', data: roomStatuses }));
+                sendNotesState(conn);
             } else if (hostPeerId && conn.peer === hostPeerId) {
                 conn.send(JSON.stringify({ type: 'room-status-request' }));
             }
-            sendNotesState(conn);
         });
 
         conn.on('data', (data) => {
@@ -307,6 +398,93 @@ function App() {
                 }
                 if (msg.type === 'room-status-request' && isHost) {
                     conn.send(JSON.stringify({ type: 'room-status', data: roomStatuses }));
+                }
+                if (msg.type === 'room-status-add-request' && isHost) {
+                    const name = String(msg.data ?? '');
+                    if (!name) return;
+                    applyRoomAdd(name);
+                }
+                if (msg.type === 'room-status-toggle-help-request' && isHost) {
+                    const name = String(msg.data ?? '');
+                    if (!name) return;
+                    applyRoomToggleHelp(name);
+                }
+                if (msg.type === 'room-status-clear-help-request' && isHost) {
+                    const name = String(msg.data ?? '');
+                    if (!name) return;
+                    applyRoomClearHelp(name);
+                }
+                if (msg.type === 'room-status-reset-request' && isHost) {
+                    const name = String(msg.data ?? '');
+                    if (!name) return;
+                    applyRoomReset(name);
+                }
+                if (msg.type === 'room-status-remove-request' && isHost) {
+                    const name = String(msg.data ?? '');
+                    if (!name) return;
+                    applyRoomRemove(name);
+                }
+                if (msg.type === 'toilet-blocked-request' && isHost) {
+                    const next = Boolean(msg.data);
+                    setToiletBlocked(next);
+                    broadcast('toilet-blocked', next);
+                }
+                if (msg.type === 'toilet-occupy-request' && isHost) {
+                    const name = String(msg.data ?? '');
+                    if (!name) return;
+                    setToiletOccupants((prev) => {
+                        if (prev.includes(name)) return prev;
+                        const next = [...prev, name];
+                        broadcast('toilet-occupants', next);
+                        return next;
+                    });
+                    addProtocolEntry('Toilette', `besetzt (${name})`);
+                }
+                if (msg.type === 'toilet-release-request' && isHost) {
+                    const name = String(msg.data ?? '');
+                    if (!name) return;
+                    setToiletOccupants((prev) => {
+                        const index = prev.indexOf(name);
+                        if (index === -1) return prev;
+                        const next = [...prev];
+                        next.splice(index, 1);
+                        broadcast('toilet-occupants', next);
+                        return next;
+                    });
+                    addProtocolEntry('Toilette', `frei (${name} zurück)`);
+                }
+                if (msg.type === 'chat-request' && isHost) {
+                    setMessages((prev) => [...prev, msg.data]);
+                    addProtocolEntry('Chat', `von ${msg.data.user}: ${msg.data.text}`);
+                    broadcast('chat', msg.data);
+                }
+                if (msg.type === 'exam-end-request' && isHost) {
+                    const next = new Date(msg.data);
+                    setExamEnd(next);
+                    broadcast('examEnd', next);
+                }
+                if (msg.type === 'exam-warning-request' && isHost) {
+                    const next = Number(msg.data);
+                    setExamWarningMinutes(next);
+                    broadcast('examWarningMinutes', next);
+                }
+                if (msg.type === 'notes-lock-request' && isHost) {
+                    const requestedName = String(msg.data?.name ?? 'Anonym');
+                    const force = Boolean(msg.data?.force);
+                    if (notesLockedBy && notesLockedBy !== conn.peer && !force) return;
+                    setNotesLockedBy(conn.peer);
+                    setNotesLockedByName(requestedName);
+                    sendNotesState();
+                }
+                if (msg.type === 'notes-save-request' && isHost) {
+                    if (notesLockedBy !== conn.peer) return;
+                    const nextText = String(msg.data?.text ?? '');
+                    const requestedName = String(msg.data?.name ?? 'Anonym');
+                    setNotesText(nextText);
+                    setNotesLockedBy(null);
+                    setNotesLockedByName(null);
+                    sendNotesState();
+                    addProtocolEntry('Notizen', `Notizen gespeichert von ${requestedName}`);
                 }
 
                 if (msg.type === 'known-peers') {
@@ -463,27 +641,39 @@ function App() {
                         occupants={toiletOccupants}
                         isBlocked={toiletBlocked}
                         onToggleBlocked={(next) => {
-                            setToiletBlocked(next);
-                            broadcast('toilet-blocked', next);
+                            if (isHost) {
+                                setToiletBlocked(next);
+                                broadcast('toilet-blocked', next);
+                            } else {
+                                sendToHost('toilet-blocked-request', next);
+                            }
                         }}
                         onOccupy={(name) => {
-                            setToiletOccupants((prev) => {
-                                const next = [...prev, name];
-                                broadcast('toilet-occupants', next);
-                                return next;
-                            });
-                            addProtocolEntry('Toilette', `besetzt (${name})`);
+                            if (isHost) {
+                                setToiletOccupants((prev) => {
+                                    const next = [...prev, name];
+                                    broadcast('toilet-occupants', next);
+                                    return next;
+                                });
+                                addProtocolEntry('Toilette', `besetzt (${name})`);
+                            } else {
+                                sendToHost('toilet-occupy-request', name);
+                            }
                         }}
                         onRelease={(name) => {
-                            setToiletOccupants((prev) => {
-                                const index = prev.indexOf(name);
-                                if (index === -1) return prev;
-                                const next = [...prev];
-                                next.splice(index, 1);
-                                broadcast('toilet-occupants', next);
-                                return next;
-                            });
-                            addProtocolEntry('Toilette', `frei (${name} zurück)`);
+                            if (isHost) {
+                                setToiletOccupants((prev) => {
+                                    const index = prev.indexOf(name);
+                                    if (index === -1) return prev;
+                                    const next = [...prev];
+                                    next.splice(index, 1);
+                                    broadcast('toilet-occupants', next);
+                                    return next;
+                                });
+                                addProtocolEntry('Toilette', `frei (${name} zurück)`);
+                            } else {
+                                sendToHost('toilet-release-request', name);
+                            }
                         }}
                         onClose={() => hideTile('toilet')}
                     />
@@ -493,69 +683,39 @@ function App() {
                         title="Raum-Status"
                         rooms={roomStatuses}
                         onAddRoom={(name) => {
-                            setRoomStatuses((prev) => {
-                                if (prev.some((room) => room.name === name)) return prev;
-                                const next = [...prev, { name, needsHelp: false, isResolved: false }];
-                                broadcastRoomStatuses(next);
-                                addProtocolEntry('Raum-Status', `Raum ${name} hinzugefügt`);
-                                return next;
-                            });
+                            if (isHost) {
+                                applyRoomAdd(name);
+                            } else {
+                                sendToHost('room-status-add-request', name);
+                            }
                         }}
                         onToggleHelp={(name) => {
-                            setRoomStatuses((prev) => {
-                                const target = prev.find((room) => room.name === name);
-                                if (!target) return prev;
-                                const nextNeedsHelp = !target.needsHelp;
-                                const next = prev.map((room) =>
-                                    room.name === name
-                                        ? { ...room, needsHelp: nextNeedsHelp, isResolved: false }
-                                        : room,
-                                );
-                                broadcastRoomStatuses(next);
-                                addProtocolEntry(
-                                    'Raum-Status',
-                                    `${name}: ${nextNeedsHelp ? 'Hilfe angefordert' : 'Hilfe zurückgenommen'}`,
-                                );
-                                return next;
-                            });
+                            if (isHost) {
+                                applyRoomToggleHelp(name);
+                            } else {
+                                sendToHost('room-status-toggle-help-request', name);
+                            }
                         }}
                         onClearHelp={(name) => {
-                            setRoomStatuses((prev) => {
-                                const target = prev.find((room) => room.name === name);
-                                if (!target) return prev;
-                                const next = prev.map((room) =>
-                                    room.name === name
-                                        ? { ...room, needsHelp: false, isResolved: true }
-                                        : room,
-                                );
-                                broadcastRoomStatuses(next);
-                                addProtocolEntry('Raum-Status', `${name}: Hilfe erledigt`);
-                                return next;
-                            });
+                            if (isHost) {
+                                applyRoomClearHelp(name);
+                            } else {
+                                sendToHost('room-status-clear-help-request', name);
+                            }
                         }}
                         onResetStatus={(name) => {
-                            setRoomStatuses((prev) => {
-                                const target = prev.find((room) => room.name === name);
-                                if (!target) return prev;
-                                const next = prev.map((room) =>
-                                    room.name === name
-                                        ? { ...room, needsHelp: false, isResolved: false }
-                                        : room,
-                                );
-                                broadcastRoomStatuses(next);
-                                addProtocolEntry('Raum-Status', `${name}: Status zurückgesetzt`);
-                                return next;
-                            });
+                            if (isHost) {
+                                applyRoomReset(name);
+                            } else {
+                                sendToHost('room-status-reset-request', name);
+                            }
                         }}
                         onRemoveRoom={(name) => {
-                            setRoomStatuses((prev) => {
-                                const target = prev.find((room) => room.name === name);
-                                if (!target) return prev;
-                                const next = prev.filter((room) => room.name !== name);
-                                broadcastRoomStatuses(next);
-                                addProtocolEntry('Raum-Status', `Raum ${name} entfernt`);
-                                return next;
-                            });
+                            if (isHost) {
+                                applyRoomRemove(name);
+                            } else {
+                                sendToHost('room-status-remove-request', name);
+                            }
                         }}
                         onClose={() => hideTile('room-status')}
                     />
@@ -566,13 +726,21 @@ function App() {
                         endTime={examEnd}
                         onSetMinutes={(min) => {
                             const end = new Date(Date.now() + min * 60000);
-                            setExamEnd(end);
-                            broadcast('examEnd', end);
+                            if (isHost) {
+                                setExamEnd(end);
+                                broadcast('examEnd', end);
+                            } else {
+                                sendToHost('exam-end-request', end.toISOString());
+                            }
                         }}
                         warningMinutes={examWarningMinutes}
                         onSetWarningMinutes={(min) => {
-                            setExamWarningMinutes(min);
-                            broadcast('examWarningMinutes', min);
+                            if (isHost) {
+                                setExamWarningMinutes(min);
+                                broadcast('examWarningMinutes', min);
+                            } else {
+                                sendToHost('exam-warning-request', min);
+                            }
                         }}
                         onClose={() => hideTile('timer')}
                     />
@@ -582,9 +750,13 @@ function App() {
                         title="Dozenten-Chat"
                         messages={messages}
                         onSend={(msg) => {
-                            setMessages((prev) => [...prev, msg]);
-                            addProtocolEntry('Chat', `von ${msg.user}: ${msg.text}`);
-                            broadcast('chat', msg);
+                            if (isHost) {
+                                setMessages((prev) => [...prev, msg]);
+                                addProtocolEntry('Chat', `von ${msg.user}: ${msg.text}`);
+                                broadcast('chat', msg);
+                            } else {
+                                sendToHost('chat-request', msg);
+                            }
                         }}
                         nickname={nickname}
                         onNicknameChange={setNickname}
