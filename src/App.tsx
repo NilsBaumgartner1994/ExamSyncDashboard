@@ -492,6 +492,9 @@ function App() {
             if (isHost) {
                 addProtocolEntry('Verbindung', `Teilnehmer ${conn.peer} beigetreten`);
             }
+            if (!isHost && hostPeerId && conn.peer === hostPeerId) {
+                rememberLastHost(hostPeerId);
+            }
             const myId = peerRef.current?.id;
             if (myId) {
                 const allPeers = Object.keys(connections.current).concat(myId);
@@ -645,9 +648,6 @@ function App() {
                     setConnecting(false);
                     setJoined(true);
                     window.history.replaceState({}, document.title, window.location.pathname);
-                    if (hostPeerId) {
-                        rememberLastHost(hostPeerId);
-                    }
                 }
             } catch (e) {
                 console.warn('Fehler beim Parsen:', e);
