@@ -63,6 +63,7 @@ function App() {
     const [autoJoinAttempted, setAutoJoinAttempted] = useState(false);
     const initialRoomParamRef = useRef<string | null>(null);
     const createRoomTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const pendingHostMessages = useRef<string[]>([]);
     const recentHostsLimit = 5;
 
     const tileDefinitions = [
@@ -88,12 +89,16 @@ function App() {
 
     const sendToHost = (type: string, data: any) => {
         if (!hostPeerId) return;
+        const payload = JSON.stringify({ type, data });
         const conn = connections.current[hostPeerId];
         if (conn?.open) {
-            conn.send(JSON.stringify({ type, data }));
+            conn.send(payload);
             return;
         }
-        broadcast(type, data);
+        pendingHostMessages.current.push(payload);
+        if (!conn) {
+            connectToPeer(hostPeerId);
+        }
     };
 
     const addProtocolEntry = (card: string, message: string) => {
@@ -507,6 +512,12 @@ function App() {
                 conn.send(JSON.stringify({ type: 'room-status', data: roomStatuses }));
                 sendNotesState(conn);
             } else if (hostPeerId && conn.peer === hostPeerId) {
+                if (pendingHostMessages.current.length > 0) {
+                    pendingHostMessages.current.forEach((message) => {
+                        conn.send(message);
+                    });
+                    pendingHostMessages.current = [];
+                }
                 conn.send(JSON.stringify({ type: 'room-status-request' }));
             }
         });
