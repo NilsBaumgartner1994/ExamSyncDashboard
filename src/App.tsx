@@ -870,7 +870,7 @@ function App() {
                         </Group>
                         <Text size="sm" c="dimmed">
                             Dieser Modus nutzt manuelles SDP/ICE-Sharing per QR-Code (ohne Signaling-Server).
-                            Nur der Client scannt das Angebot; die Antwort wird zurückkopiert oder geteilt.
+                            Beide Geräte tauschen nacheinander Angebot und Antwort aus.
                         </Text>
                         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
                             <Card shadow="sm" radius="md" withBorder>
@@ -879,7 +879,7 @@ function App() {
                                     <List size="sm" spacing="xs">
                                         <List.Item>„Angebot erstellen“ wählen.</List.Item>
                                         <List.Item>Angebot erzeugen und QR-Code teilen.</List.Item>
-                                        <List.Item>Antwort vom Client einfügen (kopiert/geteilt).</List.Item>
+                                        <List.Item>Antwort vom Client scannen oder einfügen.</List.Item>
                                         <List.Item>Auf „verbunden“ warten.</List.Item>
                                     </List>
                                 </Stack>
@@ -889,8 +889,8 @@ function App() {
                                     <Title order={4}>Client (Antwort)</Title>
                                     <List size="sm" spacing="xs">
                                         <List.Item>„Antwort erstellen“ wählen.</List.Item>
-                                        <List.Item>Angebot scannen.</List.Item>
-                                        <List.Item>Antwort erzeugen und zurückkopieren/teilen.</List.Item>
+                                        <List.Item>Angebot scannen/einfügen.</List.Item>
+                                        <List.Item>Antwort erzeugen und zurückteilen.</List.Item>
                                         <List.Item>Auf „verbunden“ warten.</List.Item>
                                     </List>
                                 </Stack>
@@ -934,8 +934,8 @@ function App() {
                             </Button>
                             <Text size="xs" c="dimmed">
                                 {experimentalMode === 'offer'
-                                    ? 'Erzeuge das Angebot und teile es per QR-Code. Die Antwort wird eingefügt.'
-                                    : 'Scanne das Angebot, erzeuge die Antwort und teile sie zurück.'}
+                                    ? 'Erzeuge das Angebot und teile es per QR-Code.'
+                                    : 'Scanne zuerst das Angebot und erzeuge danach die Antwort.'}
                             </Text>
                         </Stack>
                         {p2pQrCode && (
@@ -974,14 +974,12 @@ function App() {
                             >
                                 Signal übernehmen
                             </Button>
-                            {experimentalMode === 'answer' && (
-                                <Button
-                                    variant="light"
-                                    onClick={() => setP2pScanOpened(true)}
-                                >
-                                    QR-Code scannen
-                                </Button>
-                            )}
+                            <Button
+                                variant="light"
+                                onClick={() => setP2pScanOpened(true)}
+                            >
+                                QR-Code scannen
+                            </Button>
                         </Group>
                         {p2pConnected && (
                             <Card shadow="sm" radius="md" withBorder>
