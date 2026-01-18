@@ -55,6 +55,10 @@ function App() {
     const [hiddenTiles, setHiddenTiles] = useState<Record<string, boolean>>({});
     const [createRoomDebug, setCreateRoomDebug] = useState('Debug: bereit.');
     const [createRoomError, setCreateRoomError] = useState('');
+    const [lastConnectedHost, setLastConnectedHost] = useState<string | null>(null);
+    const [lastHostStatus, setLastHostStatus] = useState<'idle' | 'checking' | 'reachable' | 'unreachable'>(
+        'idle',
+    );
 
     const tileDefinitions = [
         { key: 'link', label: 'Mein Raum-Link' },
@@ -110,6 +114,11 @@ function App() {
             // Not a URL, fall back to raw value.
         }
         return normalizeRoomCode(rawValue);
+    };
+
+    const rememberLastHost = (peerId: string) => {
+        setLastConnectedHost(peerId);
+        localStorage.setItem('lastConnectedHost', peerId);
     };
 
     const connectToPeer = (peerId: string) => {
@@ -241,10 +250,70 @@ function App() {
     }, []);
 
     useEffect(() => {
+        const stored = localStorage.getItem('lastConnectedHost');
+        if (stored) {
+            setLastConnectedHost(normalizeRoomCode(stored));
+        }
+    }, []);
+
+    useEffect(() => {
         if (scanOpened) {
             setScanError('');
         }
     }, [scanOpened]);
+
+    useEffect(() => {
+        if (!lastConnectedHost) {
+            setLastHostStatus('idle');
+            return;
+        }
+        let cancelled = false;
+        setLastHostStatus('checking');
+        const probePeer = new Peer(`${Date.now()}-${Math.random().toString(16).slice(2)}`);
+        const cleanup = () => {
+            probePeer.disconnect();
+            probePeer.destroy();
+        };
+        const timeoutId = setTimeout(() => {
+            if (!cancelled) {
+                setLastHostStatus('unreachable');
+            }
+            cleanup();
+        }, 5000);
+
+        probePeer.on('open', () => {
+            const conn = probePeer.connect(lastConnectedHost);
+            conn.on('open', () => {
+                if (!cancelled) {
+                    setLastHostStatus('reachable');
+                }
+                clearTimeout(timeoutId);
+                conn.close();
+                cleanup();
+            });
+            conn.on('error', () => {
+                if (!cancelled) {
+                    setLastHostStatus('unreachable');
+                }
+                clearTimeout(timeoutId);
+                cleanup();
+            });
+        });
+
+        probePeer.on('error', () => {
+            if (!cancelled) {
+                setLastHostStatus('unreachable');
+            }
+            clearTimeout(timeoutId);
+            cleanup();
+        });
+
+        return () => {
+            cancelled = true;
+            clearTimeout(timeoutId);
+            cleanup();
+        };
+    }, [lastConnectedHost]);
 
     const handleScan = (detectedCodes: Array<{ rawValue: string }>) => {
         if (!detectedCodes.length) return;
@@ -330,6 +399,9 @@ function App() {
                     setConnecting(false);
                     setJoined(true);
                     window.history.replaceState({}, document.title, window.location.pathname);
+                    if (hostPeerId) {
+                        rememberLastHost(hostPeerId);
+                    }
                 }
             } catch (e) {
                 console.warn('Fehler beim Parsen:', e);
@@ -390,6 +462,30 @@ function App() {
                             QR-Code scannen
                         </Button>
                     </Group>
+                    {lastConnectedHost && (
+                        <>
+                            <Divider my="sm" label="Zuletzt verbunden mit" labelPosition="center" />
+                            <Button variant="outline" onClick={() => handleJoin(lastConnectedHost)}>
+                                {`Zuletzt verbunden mit ${formatRoomIdForDisplay(lastConnectedHost)}`}
+                            </Button>
+                            <Text
+                                size="sm"
+                                c={
+                                    lastHostStatus === 'reachable'
+                                        ? 'green'
+                                        : lastHostStatus === 'unreachable'
+                                          ? 'red'
+                                          : 'dimmed'
+                                }
+                            >
+                                {lastHostStatus === 'checking'
+                                    ? 'Erreichbarkeit wird geprüft...'
+                                    : lastHostStatus === 'reachable'
+                                      ? 'Erreichbar'
+                                      : 'Antwortet nicht'}
+                            </Text>
+                        </>
+                    )}
 
                     <Divider my="sm" label="Oder neuen Link erstellen" labelPosition="center" />
                     <Button onClick={() => handleJoin()}>Eigenen Link erstellen</Button>
