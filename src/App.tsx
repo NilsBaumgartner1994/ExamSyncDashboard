@@ -733,6 +733,34 @@ function App() {
                             QR-Code scannen
                         </Button>
                     </Group>
+                    <Divider my="sm" label="Zuletzt verbunden mit" labelPosition="center" />
+                    {lastConnectedHost ? (
+                        <Stack gap="xs">
+                            <Button variant="outline" onClick={() => handleJoin(lastConnectedHost)}>
+                                {formatRoomIdForDisplay(lastConnectedHost)}
+                            </Button>
+                            <Text
+                                size="sm"
+                                c={
+                                    lastHostStatus === 'reachable'
+                                        ? 'green'
+                                        : lastHostStatus === 'unreachable'
+                                          ? 'red'
+                                          : 'dimmed'
+                                }
+                            >
+                                {lastHostStatus === 'checking'
+                                    ? 'Erreichbarkeit des letzten Raums wird geprüft...'
+                                    : lastHostStatus === 'reachable'
+                                      ? 'Letzter Raum erreichbar'
+                                      : 'Letzter Raum antwortet nicht'}
+                            </Text>
+                        </Stack>
+                    ) : (
+                        <Text size="sm" c="dimmed">
+                            Kein zuletzt verbundener Raum gespeichert.
+                        </Text>
+                    )}
                     {lastConnectedHosts.length > 0 && (
                         <>
                             <Divider my="sm" label="Zuletzt beigetretene Räume" labelPosition="center" />
@@ -747,24 +775,6 @@ function App() {
                                     </Button>
                                 ))}
                             </Group>
-                            {lastConnectedHost && (
-                                <Text
-                                    size="sm"
-                                    c={
-                                        lastHostStatus === 'reachable'
-                                            ? 'green'
-                                            : lastHostStatus === 'unreachable'
-                                              ? 'red'
-                                              : 'dimmed'
-                                    }
-                                >
-                                    {lastHostStatus === 'checking'
-                                        ? 'Erreichbarkeit des letzten Raums wird geprüft...'
-                                        : lastHostStatus === 'reachable'
-                                          ? 'Letzter Raum erreichbar'
-                                          : 'Letzter Raum antwortet nicht'}
-                                </Text>
-                            )}
                         </>
                     )}
 
