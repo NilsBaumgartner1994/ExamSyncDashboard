@@ -31,6 +31,9 @@ export function TimerTile({
     const [remaining, setRemaining] = useState('');
     const [remainingMs, setRemainingMs] = useState<number | null>(null);
 
+    const quickMinutes = [30, 40, 60, 70, 90];
+    const warningThresholdMs = warningMinutes * 60000;
+
     useEffect(() => {
         const interval = setInterval(() => {
             if (!endTime) {
@@ -40,12 +43,15 @@ export function TimerTile({
             }
             const diff = Math.max(0, endTime.getTime() - Date.now());
             const minutes = Math.floor(diff / 60000);
-            const seconds = Math.ceil(diff / 1000);
-            setRemaining(diff < 60000 ? `${seconds} Sec` : `${minutes} min`);
+            const seconds = Math.floor((diff % 60000) / 1000);
+            const showSeconds = viewMode === 'admin'
+                || diff < 60000
+                || (warningMinutes > 0 && diff <= warningThresholdMs);
+            setRemaining(showSeconds ? `${minutes}:${seconds.toString().padStart(2, '0')} min` : `${minutes} min`);
             setRemainingMs(diff);
         }, 1000);
         return () => clearInterval(interval);
-    }, [endTime]);
+    }, [endTime, viewMode, warningMinutes, warningThresholdMs]);
 
     useEffect(() => {
         setWarningInput(`${warningMinutes}`);
@@ -66,9 +72,6 @@ export function TimerTile({
             setWarningInput(`${min}`);
         }
     };
-
-    const quickMinutes = [30, 40, 60, 70, 90];
-    const warningThresholdMs = warningMinutes * 60000;
 
     const examCardStyle = useMemo(() => {
         if (viewMode !== 'exam' || remainingMs === null) return undefined;
@@ -135,8 +138,8 @@ export function TimerTile({
                     <Button onClick={handleSet}>Klausurzeit setzen</Button>
                     <Group gap="xs" grow>
                         <TextInput
-                            placeholder="Warnung ab (Minuten)"
-                            label="Warnung ab (Minuten)"
+                            placeholder="Warnung bei weniger als (Minuten)"
+                            label="Warnung bei weniger als (Minuten)"
                             value={warningInput}
                             onChange={(e) => setWarningInput(e.currentTarget.value)}
                             inputMode="numeric"
