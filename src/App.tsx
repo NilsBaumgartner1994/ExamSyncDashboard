@@ -51,6 +51,8 @@ function App() {
     const [scanOpened, setScanOpened] = useState(false);
     const [scanError, setScanError] = useState('');
     const [hiddenTiles, setHiddenTiles] = useState<Record<string, boolean>>({});
+    const [createRoomDebug, setCreateRoomDebug] = useState('Debug: bereit.');
+    const [createRoomError, setCreateRoomError] = useState('');
 
     const tileDefinitions = [
         { key: 'link', label: 'Mein Raum-Link' },
@@ -164,6 +166,10 @@ function App() {
             alert('Ungültige Raum-ID. Bitte nur Ziffern verwenden.');
             return;
         }
+        if (!connectToId) {
+            setCreateRoomDebug('Debug: Raum-Erstellung gestartet.');
+            setCreateRoomError('');
+        }
         const myPeerId = `${Date.now()}`;
         const peer = new Peer(myPeerId);
         peerRef.current = peer;
@@ -188,9 +194,22 @@ function App() {
             setRoomId(id);
             if (!connectToId) {
                 setJoined(true);
+                setCreateRoomDebug(
+                    `Debug: Raum erstellt (ID ${formatRoomIdForDisplay(id)}).`,
+                );
                 window.history.replaceState({}, document.title, window.location.pathname);
             } else if (connectToId !== id) {
                 connectToPeer(connectToId);
+            }
+        });
+        peer.on('error', (err) => {
+            if (!connectToId) {
+                const errorMessage =
+                    (err as { message?: string; type?: string }).message ??
+                    (err as { message?: string; type?: string }).type ??
+                    'Unbekannter Fehler';
+                setCreateRoomDebug('Debug: Raum-Erstellung fehlgeschlagen.');
+                setCreateRoomError(errorMessage);
             }
         });
 
@@ -352,6 +371,10 @@ function App() {
 
                     <Divider my="sm" label="Oder neuen Link erstellen" labelPosition="center" />
                     <Button onClick={() => handleJoin()}>Eigenen Link erstellen</Button>
+                    <Text size="xs" c={createRoomError ? 'red' : 'dimmed'}>
+                        {createRoomDebug}
+                        {createRoomError ? ` Fehler: ${createRoomError}` : ''}
+                    </Text>
                 </Stack>
                 <Modal
                     opened={scanOpened}
