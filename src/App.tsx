@@ -498,6 +498,7 @@ function App() {
         } else {
             setIsHost(false);
             setHostPeerId(connectToId);
+            rememberLastHost(connectToId);
         }
         const myPeerId = `${Date.now()}`;
         const peer = new Peer(myPeerId);
@@ -1179,7 +1180,7 @@ function App() {
                             QR-Code scannen
                         </Button>
                     </Group>
-                    <Divider my="sm" label="Zuletzt verbunden mit" labelPosition="center" />
+                    <Divider my="sm" label="Zuletzt verbindungsaufbu" labelPosition="center" />
                     {lastConnectedHost ? (
                         <Stack gap="xs">
                             <Button variant="outline" onClick={() => handleJoin(lastConnectedHost)}>
