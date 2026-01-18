@@ -81,10 +81,14 @@ export function RoomStatusTile({
             rooms.map((room, index) => {
                 const isResolved = Boolean(room.isResolved);
                 const isActive = room.needsHelp || isResolved;
-                const backgroundColor = isResolved ? resolvedBackgroundColor : baseBackgroundColor;
-                const textColor = getContrastTextColor(
-                    room.needsHelp ? alertBackgroundColor : backgroundColor,
-                );
+                const backgroundColor = room.needsHelp
+                    ? blinkOn
+                        ? alertBackgroundColor
+                        : alertBackgroundAltColor
+                    : isResolved
+                      ? resolvedBackgroundColor
+                      : baseBackgroundColor;
+                const textColor = getContrastTextColor(backgroundColor);
                 const rowStyle = {
                     backgroundColor,
                     border: `1px solid ${isActive ? '#000' : '#dee2e6'}`,
@@ -129,9 +133,7 @@ export function RoomStatusTile({
                                     style={{
                                         border: '1px solid #000',
                                         backgroundColor: room.needsHelp
-                                            ? blinkOn
-                                                ? alertBackgroundColor
-                                                : alertBackgroundAltColor
+                                            ? alertBackgroundColor
                                             : undefined,
                                     }}
                                 >
