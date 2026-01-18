@@ -76,7 +76,9 @@ function App() {
     const [p2pRemoteSignal, setP2pRemoteSignal] = useState('');
     const [p2pQrCode, setP2pQrCode] = useState('');
     const [p2pScanOpened, setP2pScanOpened] = useState(false);
+    const [p2pSignalCopied, setP2pSignalCopied] = useState(false);
     const p2pPeerRef = useRef<SimplePeer.Instance | null>(null);
+    const p2pCopyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     const tileDefinitions = [
         { key: 'link', label: 'Mein Raum-Link' },
@@ -195,6 +197,11 @@ function App() {
         setP2pLocalSignal('');
         setP2pRemoteSignal('');
         setP2pQrCode('');
+        setP2pSignalCopied(false);
+        if (p2pCopyTimeoutRef.current) {
+            clearTimeout(p2pCopyTimeoutRef.current);
+            p2pCopyTimeoutRef.current = null;
+        }
     };
 
     const ensureExperimentalPeer = (initiator: boolean) => {
@@ -241,12 +248,39 @@ function App() {
             setP2pQrCode('');
             return;
         }
-        QRCode.toDataURL(p2pLocalSignal, { margin: 2, width: 256 })
+        setP2pSignalCopied(false);
+        if (p2pCopyTimeoutRef.current) {
+            clearTimeout(p2pCopyTimeoutRef.current);
+            p2pCopyTimeoutRef.current = null;
+        }
+        QRCode.toDataURL(p2pLocalSignal, { margin: 2, width: 320 })
             .then((url) => setP2pQrCode(url))
             .catch((error) => {
                 setP2pError(`QR-Code konnte nicht erstellt werden: ${error instanceof Error ? error.message : 'Fehler'}`);
             });
     }, [p2pLocalSignal]);
+
+    const handleCopyP2pSignal = async () => {
+        if (!p2pLocalSignal) return;
+        if (!navigator.clipboard?.writeText) {
+            setP2pError('Kopieren ist in diesem Browser nicht verfügbar.');
+            return;
+        }
+        try {
+            await navigator.clipboard.writeText(p2pLocalSignal);
+            setP2pSignalCopied(true);
+            if (p2pCopyTimeoutRef.current) {
+                clearTimeout(p2pCopyTimeoutRef.current);
+            }
+            p2pCopyTimeoutRef.current = setTimeout(() => {
+                setP2pSignalCopied(false);
+                p2pCopyTimeoutRef.current = null;
+            }, 2000);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unbekannter Fehler';
+            setP2pError(`Signal konnte nicht kopiert werden: ${message}`);
+        }
+    };
 
     const sendNotesState = (conn?: Peer.DataConnection) => {
         if (!isHost) return;
@@ -940,14 +974,26 @@ function App() {
                         </Stack>
                         {p2pQrCode && (
                             <Center>
-                                <img src={p2pQrCode} alt="Peer-to-Peer Signal QR-Code" style={{ width: 200 }} />
+                                <img src={p2pQrCode} alt="Peer-to-Peer Signal QR-Code" style={{ width: 320 }} />
                             </Center>
                         )}
                         {p2pLocalSignal && (
-                            <Text size="xs" c="dimmed">
-                                Lokales Signal (zum Teilen): {p2pLocalSignal.slice(0, 180)}
-                                {p2pLocalSignal.length > 180 ? '…' : ''}
-                            </Text>
+                            <Stack gap={4}>
+                                <Text size="xs" c="dimmed">
+                                    Lokales Signal (zum Teilen): {p2pLocalSignal.slice(0, 180)}
+                                    {p2pLocalSignal.length > 180 ? '…' : ''}
+                                </Text>
+                                <Group gap="xs">
+                                    <Button size="xs" variant="light" onClick={handleCopyP2pSignal}>
+                                        Signal kopieren
+                                    </Button>
+                                    {p2pSignalCopied && (
+                                        <Text size="xs" c="green">
+                                            Kopiert
+                                        </Text>
+                                    )}
+                                </Group>
+                            </Stack>
                         )}
                         <Divider label="Signal vom Gegenüber" labelPosition="center" />
                         <TextInput
