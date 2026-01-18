@@ -38,6 +38,7 @@ function App() {
     const [toiletOccupants, setToiletOccupants] = useState<string[]>([]);
     const [roomStatuses, setRoomStatuses] = useState<RoomStatus[]>([]);
     const [examEnd, setExamEnd] = useState<Date | null>(null);
+    const [examWarningMinutes, setExamWarningMinutes] = useState(5);
     const [tiles, setTiles] = useState<any>({});
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [connectedPeers, setConnectedPeers] = useState<string[]>([]);
@@ -239,6 +240,7 @@ function App() {
             }
             broadcast('new-peer', conn.peer);
             broadcast('examEnd', examEnd);
+            broadcast('examWarningMinutes', examWarningMinutes);
             broadcast('tiles', tiles);
             conn.send(JSON.stringify({ type: 'room-status', data: roomStatuses }));
             sendNotesState(conn);
@@ -248,6 +250,7 @@ function App() {
             try {
                 const msg = JSON.parse(data);
                 if (msg.type === 'examEnd') setExamEnd(new Date(msg.data));
+                if (msg.type === 'examWarningMinutes') setExamWarningMinutes(Number(msg.data));
                 if (msg.type === 'tiles') setTiles(msg.data);
                 if (msg.type === 'chat') {
                     setMessages((prev) => [...prev, msg.data]);
@@ -490,6 +493,11 @@ function App() {
                             const end = new Date(Date.now() + min * 60000);
                             setExamEnd(end);
                             broadcast('examEnd', end);
+                        }}
+                        warningMinutes={examWarningMinutes}
+                        onSetWarningMinutes={(min) => {
+                            setExamWarningMinutes(min);
+                            broadcast('examWarningMinutes', min);
                         }}
                         onClose={() => hideTile('timer')}
                     />
