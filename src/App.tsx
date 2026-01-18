@@ -62,7 +62,6 @@ function App() {
     const [lastHostStatus, setLastHostStatus] = useState<'idle' | 'checking' | 'reachable' | 'unreachable'>(
         'idle',
     );
-    const [autoJoinAttempted, setAutoJoinAttempted] = useState(false);
     const initialRoomParamRef = useRef<string | null>(null);
     const createRoomTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const recentHostsLimit = 5;
@@ -510,21 +509,6 @@ function App() {
         }
         addProtocolEntry('Login', 'Keine zuletzt beigetretenen Räume im lokalen Speicher gefunden.');
     }, [addProtocolEntry, joined, lastConnectedHosts, lastHostsLoaded, lastHostsLogged]);
-
-    useEffect(() => {
-        if (
-            autoJoinAttempted ||
-            initialRoomParamRef.current ||
-            !lastConnectedHost ||
-            connecting ||
-            joined
-        ) {
-            return;
-        }
-        setAutoJoinAttempted(true);
-        setRoomIdInput(lastConnectedHost);
-        handleJoin(lastConnectedHost);
-    }, [autoJoinAttempted, connecting, joined, lastConnectedHost]);
 
     useEffect(() => {
         if (scanOpened) {
