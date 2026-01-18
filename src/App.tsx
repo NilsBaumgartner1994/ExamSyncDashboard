@@ -19,7 +19,6 @@ import {
     Modal,
     Group,
     Card,
-    List,
     Textarea,
 } from '@mantine/core';
 import { Scanner } from '@yudiel/react-qr-scanner';
@@ -927,30 +926,6 @@ function App() {
                                 </Button>
                             </Group>
                         </Stack>
-                        {p2pRole === 'host' && (
-                            <Card shadow="sm" radius="md" withBorder>
-                                <Stack gap="xs">
-                                    <Title order={4}>Host</Title>
-                                    <List size="sm" spacing="xs">
-                                        <List.Item>Schritt 1: QR-Code neu erstellen.</List.Item>
-                                        <List.Item>Schritt 3: Antwort vom Client kopieren oder scannen.</List.Item>
-                                    </List>
-                                </Stack>
-                            </Card>
-                        )}
-                        {p2pRole === 'client' && (
-                            <Card shadow="sm" radius="md" withBorder>
-                                <Stack gap="xs">
-                                    <Title order={4}>Client</Title>
-                                    <List size="sm" spacing="xs">
-                                        <List.Item>Schritt 2: Code vom Host scannen oder einfügen.</List.Item>
-                                    </List>
-                                    <Text size="xs" c="dimmed">
-                                        Nach dem Übernehmen wird die Antwort erzeugt und angezeigt.
-                                    </Text>
-                                </Stack>
-                            </Card>
-                        )}
                         <Text size="sm" c="dimmed">
                             Status: {p2pStatus}
                         </Text>
@@ -960,82 +935,145 @@ function App() {
                             </Text>
                         )}
                         {p2pRole === 'host' && (
-                            <Stack gap="xs">
-                                <Button
-                                    onClick={() => {
-                                        resetExperimentalState();
-                                        ensureExperimentalPeer(true);
-                                    }}
-                                >
-                                    QR-Code neu erstellen
-                                </Button>
-                                <Text size="xs" c="dimmed">
-                                    Erstellt ein neues Angebot für den Host-QR-Code.
-                                </Text>
-                            </Stack>
-                        )}
-                        {p2pQrCode && (
-                            <Center>
-                                <img
-                                    src={p2pQrCode}
-                                    alt="Peer-to-Peer Signal QR-Code"
-                                    style={{ width: 320 }}
-                                />
-                            </Center>
-                        )}
-                        {p2pLocalSignal && (
-                            <Stack gap={4}>
-                                <Text size="xs" c="dimmed">
-                                    Komprimiertes Signal (zum Teilen): {p2pLocalSignal.slice(0, 180)}
-                                    {p2pLocalSignal.length > 180 ? '…' : ''}
-                                </Text>
-                                <Group gap="xs">
-                                    <Button size="xs" variant="light" onClick={handleCopyP2pSignal}>
-                                        Signal kopieren
+                            <Card shadow="sm" radius="md" withBorder>
+                                <Stack gap="xs">
+                                    <Title order={4}>1. Schritt</Title>
+                                    <Text size="sm">QR-Code erstellen und vom Client scannen lassen.</Text>
+                                    <Button
+                                        onClick={() => {
+                                            resetExperimentalState();
+                                            ensureExperimentalPeer(true);
+                                        }}
+                                    >
+                                        QR-Code neu erstellen
                                     </Button>
-                                    {p2pSignalCopied && (
-                                        <Text size="xs" c="green">
-                                            Kopiert
+                                    <Text size="xs" c="dimmed">
+                                        Erstellt ein neues Angebot für den Host-QR-Code.
+                                    </Text>
+                                    {p2pQrCode ? (
+                                        <Center>
+                                            <img
+                                                src={p2pQrCode}
+                                                alt="Peer-to-Peer Signal QR-Code"
+                                                style={{ width: 320 }}
+                                            />
+                                        </Center>
+                                    ) : (
+                                        <Text size="xs" c="dimmed">
+                                            Noch kein QR-Code erzeugt.
                                         </Text>
                                     )}
-                                </Group>
-                            </Stack>
+                                    {p2pLocalSignal && (
+                                        <Stack gap={4}>
+                                            <Text size="xs" c="dimmed">
+                                                Komprimiertes Signal (zum Teilen): {p2pLocalSignal.slice(0, 180)}
+                                                {p2pLocalSignal.length > 180 ? '…' : ''}
+                                            </Text>
+                                            <Group gap="xs">
+                                                <Button size="xs" variant="light" onClick={handleCopyP2pSignal}>
+                                                    Signal kopieren
+                                                </Button>
+                                                {p2pSignalCopied && (
+                                                    <Text size="xs" c="green">
+                                                        Kopiert
+                                                    </Text>
+                                                )}
+                                            </Group>
+                                        </Stack>
+                                    )}
+                                </Stack>
+                            </Card>
                         )}
-                        <Divider
-                            label={
-                                p2pRole === 'host'
-                                    ? 'Antwort vom Client'
-                                    : p2pRole === 'client'
-                                      ? 'Angebot vom Host'
-                                      : 'Signal vom Gegenüber'
-                            }
-                            labelPosition="center"
-                        />
-                        <TextInput
-                            placeholder={
-                                p2pRole === 'host'
-                                    ? 'Antwort/Signal einfügen'
-                                    : p2pRole === 'client'
-                                      ? 'Angebot/Signal einfügen'
-                                      : 'Signal/SDP einfügen'
-                            }
-                            value={p2pRemoteSignal}
-                            onChange={(event) => setP2pRemoteSignal(event.currentTarget.value)}
-                        />
-                        <Group grow>
-                            <Button
-                                variant="light"
-                                onClick={() => applyExperimentalSignal(p2pRemoteSignal)}
-                            >
-                                Signal übernehmen
-                            </Button>
-                            <Button
-                                variant="light"
-                                onClick={() => setP2pScanOpened(true)}
-                            >
-                                QR-Code scannen
-                            </Button>
-                        </Group>
+                        {p2pRole === 'client' && (
+                            <Card shadow="sm" radius="md" withBorder>
+                                <Stack gap="xs">
+                                    <Title order={4}>2. Schritt</Title>
+                                    <Text size="sm">Angebot vom Host scannen oder einfügen.</Text>
+                                    <TextInput
+                                        placeholder="Angebot/Signal einfügen"
+                                        value={p2pRemoteSignal}
+                                        onChange={(event) => setP2pRemoteSignal(event.currentTarget.value)}
+                                    />
+                                    <Group grow>
+                                        <Button
+                                            variant="light"
+                                            onClick={() => applyExperimentalSignal(p2pRemoteSignal)}
+                                        >
+                                            Signal übernehmen
+                                        </Button>
+                                        <Button
+                                            variant="light"
+                                            onClick={() => setP2pScanOpened(true)}
+                                        >
+                                            QR-Code scannen
+                                        </Button>
+                                    </Group>
+                                    <Text size="xs" c="dimmed">
+                                        Nach dem Übernehmen wird die Antwort erzeugt und angezeigt.
+                                    </Text>
+                                </Stack>
+                            </Card>
+                        )}
+                        {p2pRole === 'client' && p2pLocalSignal && (
+                            <Card shadow="sm" radius="md" withBorder>
+                                <Stack gap="xs">
+                                    <Title order={4}>Antwort für den Host</Title>
+                                    <Text size="sm">Teile diesen QR-Code mit dem Host.</Text>
+                                    {p2pQrCode && (
+                                        <Center>
+                                            <img
+                                                src={p2pQrCode}
+                                                alt="Peer-to-Peer Antwort QR-Code"
+                                                style={{ width: 320 }}
+                                            />
+                                        </Center>
+                                    )}
+                                    <Stack gap={4}>
+                                        <Text size="xs" c="dimmed">
+                                            Komprimiertes Signal (zum Teilen): {p2pLocalSignal.slice(0, 180)}
+                                            {p2pLocalSignal.length > 180 ? '…' : ''}
+                                        </Text>
+                                        <Group gap="xs">
+                                            <Button size="xs" variant="light" onClick={handleCopyP2pSignal}>
+                                                Signal kopieren
+                                            </Button>
+                                            {p2pSignalCopied && (
+                                                <Text size="xs" c="green">
+                                                    Kopiert
+                                                </Text>
+                                            )}
+                                        </Group>
+                                    </Stack>
+                                </Stack>
+                            </Card>
+                        )}
+                        {p2pRole === 'host' && p2pQrCode && (
+                            <Card shadow="sm" radius="md" withBorder>
+                                <Stack gap="xs">
+                                    <Title order={4}>3. Schritt</Title>
+                                    <Text size="sm">Antwort vom Client scannen oder einfügen.</Text>
+                                    <TextInput
+                                        placeholder="Antwort/Signal einfügen"
+                                        value={p2pRemoteSignal}
+                                        onChange={(event) => setP2pRemoteSignal(event.currentTarget.value)}
+                                    />
+                                    <Group grow>
+                                        <Button
+                                            variant="light"
+                                            onClick={() => applyExperimentalSignal(p2pRemoteSignal)}
+                                        >
+                                            Signal übernehmen
+                                        </Button>
+                                        <Button
+                                            variant="light"
+                                            onClick={() => setP2pScanOpened(true)}
+                                        >
+                                            QR-Code scannen
+                                        </Button>
+                                    </Group>
+                                </Stack>
+                            </Card>
+                        )}
                         {p2pConnected && (
                             <Card shadow="sm" radius="md" withBorder>
                                 <Stack gap="xs">
