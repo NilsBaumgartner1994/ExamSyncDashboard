@@ -1,12 +1,15 @@
 // src/components/TimerTile.tsx
-import React, { useEffect, useState } from 'react';
-import { Button, Group, Stack, Text, TextInput } from '@mantine/core';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ActionIcon, Button, Center, Group, Stack, Text, TextInput } from '@mantine/core';
+import { IconEye } from '@tabler/icons-react';
 import { TileWrapper } from './TileWrapper';
 
 interface TimerTileProps {
     title: string;
     endTime: Date | null;
     onSetMinutes: (minutes: number) => void;
+    warningMinutes: number;
+    onSetWarningMinutes: (minutes: number) => void;
     defaultSpan?: number;
     onSpanChange?: (span: number) => void;
     onClose?: () => void;
@@ -16,23 +19,37 @@ export function TimerTile({
                               title,
                               endTime,
                               onSetMinutes,
+                              warningMinutes,
+                              onSetWarningMinutes,
                               defaultSpan = 2,
                               onSpanChange,
                               onClose,
                           }: TimerTileProps) {
+    const [viewMode, setViewMode] = useState<'admin' | 'exam'>('admin');
     const [input, setInput] = useState('');
+    const [warningInput, setWarningInput] = useState(`${warningMinutes}`);
     const [remaining, setRemaining] = useState('');
+    const [remainingMs, setRemainingMs] = useState<number | null>(null);
 
     useEffect(() => {
         const interval = setInterval(() => {
-            if (!endTime) return setRemaining('nicht gesetzt');
+            if (!endTime) {
+                setRemaining('nicht gesetzt');
+                setRemainingMs(null);
+                return;
+            }
             const diff = Math.max(0, endTime.getTime() - Date.now());
-            const m = Math.floor(diff / 60000);
-            const s = Math.floor((diff % 60000) / 1000);
-            setRemaining(`${m}m ${s}s`);
+            const minutes = Math.floor(diff / 60000);
+            const seconds = Math.ceil(diff / 1000);
+            setRemaining(diff < 60000 ? `${seconds} Sec` : `${minutes} min`);
+            setRemainingMs(diff);
         }, 1000);
         return () => clearInterval(interval);
     }, [endTime]);
+
+    useEffect(() => {
+        setWarningInput(`${warningMinutes}`);
+    }, [warningMinutes]);
 
     const handleSet = () => {
         const min = parseInt(input);
@@ -42,7 +59,27 @@ export function TimerTile({
         }
     };
 
+    const handleWarningSet = () => {
+        const min = parseInt(warningInput);
+        if (!isNaN(min) && min >= 0) {
+            onSetWarningMinutes(min);
+            setWarningInput(`${min}`);
+        }
+    };
+
     const quickMinutes = [30, 40, 60, 70, 90];
+    const warningThresholdMs = warningMinutes * 60000;
+
+    const examCardStyle = useMemo(() => {
+        if (viewMode !== 'exam' || remainingMs === null) return undefined;
+        if (remainingMs <= 0) {
+            return { backgroundColor: '#f03e3e', color: '#fff' };
+        }
+        if (warningMinutes > 0 && remainingMs <= warningThresholdMs) {
+            return { backgroundColor: '#fab005', color: '#1c1c1c' };
+        }
+        return undefined;
+    }, [remainingMs, viewMode, warningMinutes, warningThresholdMs]);
 
     return (
         <TileWrapper
@@ -50,35 +87,67 @@ export function TimerTile({
             defaultSpan={defaultSpan}
             onSpanChange={onSpanChange}
             onClose={onClose}
+            cardStyle={examCardStyle}
+            headerActions={(
+                <ActionIcon
+                    onClick={() => setViewMode((prev) => (prev === 'admin' ? 'exam' : 'admin'))}
+                    variant="light"
+                    aria-label="Ansicht wechseln"
+                >
+                    <IconEye size={16} />
+                </ActionIcon>
+            )}
         >
-            <Stack>
-                <Text ta="center">Restzeit: {remaining}</Text>
-                <Group gap="xs" justify="center">
-                    {quickMinutes.map((minutes) => (
-                        <Button
-                            key={minutes}
-                            size="xs"
-                            variant="light"
-                            onClick={() => {
-                                onSetMinutes(minutes);
-                                setInput('');
-                            }}
-                        >
-                            {minutes}m
-                        </Button>
-                    ))}
-                </Group>
-                <TextInput
-                    placeholder="Minuten eingeben"
-                    value={input}
-                    onChange={(e) => setInput(e.currentTarget.value)}
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    type="number"
-                    min={1}
-                />
-                <Button onClick={handleSet}>Klausurzeit setzen</Button>
-            </Stack>
+            {viewMode === 'exam' ? (
+                <Center>
+                    <Stack align="center" gap="xs">
+                        <Text size="sm" c="dimmed">Restzeit</Text>
+                        <Text size="xl" fw={600}>{remaining}</Text>
+                    </Stack>
+                </Center>
+            ) : (
+                <Stack>
+                    <Text ta="center">Restzeit: {remaining}</Text>
+                    <Group gap="xs" justify="center">
+                        {quickMinutes.map((minutes) => (
+                            <Button
+                                key={minutes}
+                                size="xs"
+                                variant="light"
+                                onClick={() => {
+                                    onSetMinutes(minutes);
+                                    setInput('');
+                                }}
+                            >
+                                {minutes}m
+                            </Button>
+                        ))}
+                    </Group>
+                    <TextInput
+                        placeholder="Minuten eingeben"
+                        value={input}
+                        onChange={(e) => setInput(e.currentTarget.value)}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        type="number"
+                        min={1}
+                    />
+                    <Button onClick={handleSet}>Klausurzeit setzen</Button>
+                    <Group gap="xs" grow>
+                        <TextInput
+                            placeholder="Warnung ab (Minuten)"
+                            label="Warnung ab (Minuten)"
+                            value={warningInput}
+                            onChange={(e) => setWarningInput(e.currentTarget.value)}
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            type="number"
+                            min={0}
+                        />
+                        <Button onClick={handleWarningSet}>Warnung speichern</Button>
+                    </Group>
+                </Stack>
+            )}
         </TileWrapper>
     );
 }
