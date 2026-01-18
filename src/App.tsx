@@ -534,12 +534,6 @@ function App() {
             if (!isHost && hostPeerId && conn.peer === hostPeerId) {
                 rememberLastHost(hostPeerId);
             }
-            const myId = peerRef.current?.id;
-            if (myId) {
-                const allPeers = Object.keys(connections.current).concat(myId);
-                conn.send(JSON.stringify({ type: 'known-peers', data: allPeers }));
-            }
-            broadcast('new-peer', conn.peer);
             if (isHost) {
                 broadcast('examEnd', examEnd);
                 broadcast('examWarningMinutes', examWarningMinutes);
@@ -556,6 +550,11 @@ function App() {
         conn.on('data', (data) => {
             try {
                 const msg = JSON.parse(data);
+                const isAuthoritative =
+                    isHost || (hostPeerId && conn.peer === hostPeerId);
+                if (!isAuthoritative) {
+                    return;
+                }
                 if (msg.type === 'examEnd') setExamEnd(new Date(msg.data));
                 if (msg.type === 'examWarningMinutes') setExamWarningMinutes(Number(msg.data));
                 if (msg.type === 'tiles') setTiles(msg.data);
@@ -667,22 +666,6 @@ function App() {
                     setNotesLockedByName(null);
                     sendNotesState();
                     addProtocolEntry('Notizen', `Notizen gespeichert von ${requestedName}`);
-                }
-
-                if (msg.type === 'known-peers') {
-                    const peerIds: string[] = msg.data;
-                    peerIds.forEach((pid) => {
-                        if (pid && pid !== peerRef.current?.id && !connections.current[pid]) {
-                            connectToPeer(pid);
-                        }
-                    });
-                }
-
-                if (msg.type === 'new-peer') {
-                    const newPeerId = msg.data;
-                    if (newPeerId && newPeerId !== peerRef.current?.id && !connections.current[newPeerId]) {
-                        connectToPeer(newPeerId);
-                    }
                 }
 
                 if (msg.type === 'welcome') {
