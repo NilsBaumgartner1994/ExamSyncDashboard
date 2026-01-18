@@ -29,7 +29,7 @@ const bellBlink = keyframes`
     background-color: #ffd43b;
   }
   50% {
-    background-color: transparent;
+    background-color: #fff3bf;
   }
 `;
 
@@ -131,14 +131,17 @@ export function RoomStatusTile({
                                 <Group gap="sm">
                                     <ActionIcon
                                         size="lg"
-                                        variant="light"
+                                        variant="filled"
                                         color="green"
                                         aria-label="Hilfe erledigt"
                                         onClick={(event) => {
                                             event.stopPropagation();
                                             onClearHelp(room.name);
                                         }}
-                                        style={{ border: '1px solid #000' }}
+                                        style={{
+                                            border: '1px solid #000',
+                                            backgroundColor: resolvedBackgroundColor,
+                                        }}
                                     >
                                         <IconCheck size={18} />
                                     </ActionIcon>
