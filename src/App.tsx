@@ -434,7 +434,7 @@ function App() {
                         onAddRoom={(name) => {
                             setRoomStatuses((prev) => {
                                 if (prev.some((room) => room.name === name)) return prev;
-                                const next = [...prev, { name, needsHelp: false }];
+                                const next = [...prev, { name, needsHelp: false, isResolved: false }];
                                 broadcastRoomStatuses(next);
                                 return next;
                             });
@@ -443,7 +443,7 @@ function App() {
                             setRoomStatuses((prev) => {
                                 const next = prev.map((room) =>
                                     room.name === name
-                                        ? { ...room, needsHelp: !room.needsHelp }
+                                        ? { ...room, needsHelp: !room.needsHelp, isResolved: false }
                                         : room,
                                 );
                                 broadcastRoomStatuses(next);
@@ -454,7 +454,7 @@ function App() {
                             setRoomStatuses((prev) => {
                                 const next = prev.map((room) =>
                                     room.name === name
-                                        ? { ...room, needsHelp: false }
+                                        ? { ...room, needsHelp: false, isResolved: true }
                                         : room,
                                 );
                                 broadcastRoomStatuses(next);
