@@ -527,6 +527,9 @@ function App() {
 
     const setupConnection = (conn: Peer.DataConnection) => {
         conn.on('open', () => {
+            if (!connections.current[conn.peer]) {
+                connections.current[conn.peer] = conn;
+            }
             setConnectedPeers(Object.keys(connections.current));
             if (isHost) {
                 addProtocolEntry('Verbindung', `Teilnehmer ${conn.peer} beigetreten`);
