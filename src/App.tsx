@@ -263,6 +263,7 @@ function App() {
             broadcast('examWarningMinutes', examWarningMinutes);
             broadcast('tiles', tiles);
             conn.send(JSON.stringify({ type: 'toilet-blocked', data: toiletBlocked }));
+            conn.send(JSON.stringify({ type: 'toilet-occupants', data: toiletOccupants }));
             conn.send(JSON.stringify({ type: 'room-status', data: roomStatuses }));
             sendNotesState(conn);
         });
@@ -274,6 +275,9 @@ function App() {
                 if (msg.type === 'examWarningMinutes') setExamWarningMinutes(Number(msg.data));
                 if (msg.type === 'tiles') setTiles(msg.data);
                 if (msg.type === 'toilet-blocked') setToiletBlocked(Boolean(msg.data));
+                if (msg.type === 'toilet-occupants') {
+                    setToiletOccupants(Array.isArray(msg.data) ? msg.data : []);
+                }
                 if (msg.type === 'chat') {
                     setMessages((prev) => [...prev, msg.data]);
                     addProtocolEntry('Chat', `von ${msg.data.user}: ${msg.data.text}`);
@@ -445,7 +449,11 @@ function App() {
                             broadcast('toilet-blocked', next);
                         }}
                         onOccupy={(name) => {
-                            setToiletOccupants((prev) => [...prev, name]);
+                            setToiletOccupants((prev) => {
+                                const next = [...prev, name];
+                                broadcast('toilet-occupants', next);
+                                return next;
+                            });
                             addProtocolEntry('Toilette', `besetzt (${name})`);
                         }}
                         onRelease={(name) => {
@@ -454,6 +462,7 @@ function App() {
                                 if (index === -1) return prev;
                                 const next = [...prev];
                                 next.splice(index, 1);
+                                broadcast('toilet-occupants', next);
                                 return next;
                             });
                             addProtocolEntry('Toilette', `frei (${name} zurück)`);
