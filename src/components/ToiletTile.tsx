@@ -33,14 +33,15 @@ export function ToiletTile({
     const [nameInput, setNameInput] = useState('');
     const isOccupied = occupants.length > 0;
     const statusLabel = isOccupied ? `Besetzt (${occupants.length})` : 'Frei';
+    const examStatusLabel = isBlocked ? 'nicht möglich' : statusLabel;
 
     const examCardStyle = useMemo(() => {
-        if (viewMode !== 'exam') return undefined;
+        if (viewMode !== 'exam' || isBlocked) return undefined;
         return {
             backgroundColor: isOccupied ? '#f03e3e' : '#2f9e44',
             color: '#fff',
         };
-    }, [isOccupied, viewMode]);
+    }, [isBlocked, isOccupied, viewMode]);
 
     const handleOccupy = () => {
         const trimmed = nameInput.trim();
@@ -86,7 +87,7 @@ export function ToiletTile({
                                 />
                             )}
                         </div>
-                        <Text fw={600}>{statusLabel}</Text>
+                        <Text fw={600}>{examStatusLabel}</Text>
                     </Stack>
                 </Center>
             ) : (
