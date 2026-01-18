@@ -47,6 +47,8 @@ function App() {
     const [notesText, setNotesText] = useState('');
     const [notesLockedBy, setNotesLockedBy] = useState<string | null>(null);
     const [notesLockedByName, setNotesLockedByName] = useState<string | null>(null);
+    const [isHost, setIsHost] = useState(false);
+    const [hostPeerId, setHostPeerId] = useState<string | null>(null);
     const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const [scanOpened, setScanOpened] = useState(false);
     const [scanError, setScanError] = useState('');
@@ -169,6 +171,11 @@ function App() {
         if (!connectToId) {
             setCreateRoomDebug('Debug: Raum-Erstellung gestartet.');
             setCreateRoomError('');
+            setIsHost(true);
+            setHostPeerId(null);
+        } else {
+            setIsHost(false);
+            setHostPeerId(connectToId);
         }
         const myPeerId = `${Date.now()}`;
         const peer = new Peer(myPeerId);
@@ -197,6 +204,7 @@ function App() {
                 setCreateRoomDebug(
                     `Debug: Raum erstellt (ID ${formatRoomIdForDisplay(id)}).`,
                 );
+                setHostPeerId(id);
                 window.history.replaceState({}, document.title, window.location.pathname);
             } else if (connectToId !== id) {
                 connectToPeer(connectToId);
@@ -253,6 +261,9 @@ function App() {
     const setupConnection = (conn: Peer.DataConnection) => {
         conn.on('open', () => {
             setConnectedPeers(Object.keys(connections.current));
+            if (isHost) {
+                addProtocolEntry('Verbindung', `Teilnehmer ${conn.peer} beigetreten`);
+            }
             const myId = peerRef.current?.id;
             if (myId) {
                 const allPeers = Object.keys(connections.current).concat(myId);
@@ -264,7 +275,11 @@ function App() {
             broadcast('tiles', tiles);
             conn.send(JSON.stringify({ type: 'toilet-blocked', data: toiletBlocked }));
             conn.send(JSON.stringify({ type: 'toilet-occupants', data: toiletOccupants }));
-            conn.send(JSON.stringify({ type: 'room-status', data: roomStatuses }));
+            if (isHost) {
+                conn.send(JSON.stringify({ type: 'room-status', data: roomStatuses }));
+            } else if (hostPeerId && conn.peer === hostPeerId) {
+                conn.send(JSON.stringify({ type: 'room-status-request' }));
+            }
             sendNotesState(conn);
         });
 
@@ -289,6 +304,9 @@ function App() {
                 }
                 if (msg.type === 'room-status') {
                     setRoomStatuses(Array.isArray(msg.data) ? msg.data : []);
+                }
+                if (msg.type === 'room-status-request' && isHost) {
+                    conn.send(JSON.stringify({ type: 'room-status', data: roomStatuses }));
                 }
 
                 if (msg.type === 'known-peers') {
@@ -479,46 +497,63 @@ function App() {
                                 if (prev.some((room) => room.name === name)) return prev;
                                 const next = [...prev, { name, needsHelp: false, isResolved: false }];
                                 broadcastRoomStatuses(next);
+                                addProtocolEntry('Raum-Status', `Raum ${name} hinzugefügt`);
                                 return next;
                             });
                         }}
                         onToggleHelp={(name) => {
                             setRoomStatuses((prev) => {
+                                const target = prev.find((room) => room.name === name);
+                                if (!target) return prev;
+                                const nextNeedsHelp = !target.needsHelp;
                                 const next = prev.map((room) =>
                                     room.name === name
-                                        ? { ...room, needsHelp: !room.needsHelp, isResolved: false }
+                                        ? { ...room, needsHelp: nextNeedsHelp, isResolved: false }
                                         : room,
                                 );
                                 broadcastRoomStatuses(next);
+                                addProtocolEntry(
+                                    'Raum-Status',
+                                    `${name}: ${nextNeedsHelp ? 'Hilfe angefordert' : 'Hilfe zurückgenommen'}`,
+                                );
                                 return next;
                             });
                         }}
                         onClearHelp={(name) => {
                             setRoomStatuses((prev) => {
+                                const target = prev.find((room) => room.name === name);
+                                if (!target) return prev;
                                 const next = prev.map((room) =>
                                     room.name === name
                                         ? { ...room, needsHelp: false, isResolved: true }
                                         : room,
                                 );
                                 broadcastRoomStatuses(next);
+                                addProtocolEntry('Raum-Status', `${name}: Hilfe erledigt`);
                                 return next;
                             });
                         }}
                         onResetStatus={(name) => {
                             setRoomStatuses((prev) => {
+                                const target = prev.find((room) => room.name === name);
+                                if (!target) return prev;
                                 const next = prev.map((room) =>
                                     room.name === name
                                         ? { ...room, needsHelp: false, isResolved: false }
                                         : room,
                                 );
                                 broadcastRoomStatuses(next);
+                                addProtocolEntry('Raum-Status', `${name}: Status zurückgesetzt`);
                                 return next;
                             });
                         }}
                         onRemoveRoom={(name) => {
                             setRoomStatuses((prev) => {
+                                const target = prev.find((room) => room.name === name);
+                                if (!target) return prev;
                                 const next = prev.filter((room) => room.name !== name);
                                 broadcastRoomStatuses(next);
+                                addProtocolEntry('Raum-Status', `Raum ${name} entfernt`);
                                 return next;
                             });
                         }}
