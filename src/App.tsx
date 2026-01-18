@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Peer from 'peerjs';
 import SimplePeer from 'simple-peer';
 import QRCode from 'qrcode';
+import pako from 'pako';
 import {
     AppShell,
     SimpleGrid,
@@ -71,7 +72,6 @@ function App() {
     const [showDebugProtocol, setShowDebugProtocol] = useState(false);
     const [lastHostsLoaded, setLastHostsLoaded] = useState(false);
     const [lastHostsLogged, setLastHostsLogged] = useState(false);
-    const [experimentalMode, setExperimentalMode] = useState<'offer' | 'answer'>('offer');
     const [p2pStatus, setP2pStatus] = useState('Bereit.');
     const [p2pError, setP2pError] = useState('');
     const [p2pLocalSignal, setP2pLocalSignal] = useState('');
@@ -85,6 +85,7 @@ function App() {
         Array<{ id: string; user: string; text: string }>
     >([]);
     const [authScreen, setAuthScreen] = useState<'join' | 'experimental'>('join');
+    const [p2pRole, setP2pRole] = useState<'host' | 'client' | null>(null);
     const p2pPeerRef = useRef<SimplePeer.Instance | null>(null);
     const p2pCopyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -215,6 +216,31 @@ function App() {
         }
     };
 
+    const encodeP2pSignal = (rawSignal: string) => {
+        const encoder = new TextEncoder();
+        const encoded = encoder.encode(rawSignal);
+        const compressed = pako.gzip(encoded);
+        const binary = String.fromCharCode(...compressed);
+        return `gz:${btoa(binary)}`;
+    };
+
+    const decodeP2pSignal = (rawSignal: string) => {
+        if (!rawSignal.startsWith('gz:')) {
+            return rawSignal;
+        }
+        const base64 = rawSignal.slice(3);
+        const binary = atob(base64);
+        const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+        const decompressed = pako.ungzip(bytes);
+        const decoder = new TextDecoder();
+        return decoder.decode(decompressed);
+    };
+
+    const handleSelectExperimentalRole = (role: 'host' | 'client') => {
+        resetExperimentalState();
+        setP2pRole(role);
+    };
+
     const ensureExperimentalPeer = (initiator: boolean) => {
         if (p2pPeerRef.current) {
             return;
@@ -224,8 +250,14 @@ function App() {
         setP2pStatus(initiator ? 'Angebot wird erstellt…' : 'Warte auf Angebot…');
         peer.on('signal', (data) => {
             const payload = JSON.stringify(data);
-            setP2pLocalSignal(payload);
-            setP2pStatus(initiator ? 'Angebot bereit.' : 'Antwort bereit.');
+            try {
+                const encoded = encodeP2pSignal(payload);
+                setP2pLocalSignal(encoded);
+                setP2pStatus(initiator ? 'Angebot bereit.' : 'Antwort bereit.');
+            } catch (error) {
+                const message = error instanceof Error ? error.message : 'Unbekannter Fehler';
+                setP2pError(`Signal konnte nicht komprimiert werden: ${message}`);
+            }
         });
         peer.on('connect', () => {
             setP2pStatus('Peer-to-Peer verbunden.');
@@ -275,7 +307,8 @@ function App() {
     const applyExperimentalSignal = (rawSignal: string) => {
         if (!rawSignal.trim()) return;
         try {
-            const parsed = JSON.parse(rawSignal);
+            const decoded = decodeP2pSignal(rawSignal.trim());
+            const parsed = JSON.parse(decoded);
             if (!p2pPeerRef.current) {
                 ensureExperimentalPeer(false);
             }
@@ -872,50 +905,52 @@ function App() {
                             Dieser Modus nutzt manuelles SDP/ICE-Sharing per QR-Code (ohne Signaling-Server).
                             Beide Geräte tauschen nacheinander Angebot und Antwort aus.
                         </Text>
-                        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
+                        <Text size="sm" c="dimmed">
+                            Signale werden vor dem Anzeigen/QR-Code komprimiert, um kleinere Codes zu erzeugen.
+                        </Text>
+                        <Stack gap="xs">
+                            <Text size="sm" fw={600}>
+                                Rolle wählen
+                            </Text>
+                            <Group grow>
+                                <Button
+                                    variant={p2pRole === 'host' ? 'filled' : 'light'}
+                                    onClick={() => handleSelectExperimentalRole('host')}
+                                >
+                                    Host
+                                </Button>
+                                <Button
+                                    variant={p2pRole === 'client' ? 'filled' : 'light'}
+                                    onClick={() => handleSelectExperimentalRole('client')}
+                                >
+                                    Client
+                                </Button>
+                            </Group>
+                        </Stack>
+                        {p2pRole === 'host' && (
                             <Card shadow="sm" radius="md" withBorder>
                                 <Stack gap="xs">
-                                    <Title order={4}>Host (Angebot)</Title>
+                                    <Title order={4}>Host</Title>
                                     <List size="sm" spacing="xs">
-                                        <List.Item>„Angebot erstellen“ wählen.</List.Item>
-                                        <List.Item>Angebot erzeugen und QR-Code teilen.</List.Item>
-                                        <List.Item>Antwort vom Client scannen oder einfügen.</List.Item>
-                                        <List.Item>Auf „verbunden“ warten.</List.Item>
+                                        <List.Item>Schritt 1: QR-Code neu erstellen.</List.Item>
+                                        <List.Item>Schritt 3: Antwort vom Client kopieren oder scannen.</List.Item>
                                     </List>
                                 </Stack>
                             </Card>
+                        )}
+                        {p2pRole === 'client' && (
                             <Card shadow="sm" radius="md" withBorder>
                                 <Stack gap="xs">
-                                    <Title order={4}>Client (Antwort)</Title>
+                                    <Title order={4}>Client</Title>
                                     <List size="sm" spacing="xs">
-                                        <List.Item>„Antwort erstellen“ wählen.</List.Item>
-                                        <List.Item>Angebot scannen/einfügen.</List.Item>
-                                        <List.Item>Antwort erzeugen und zurückteilen.</List.Item>
-                                        <List.Item>Auf „verbunden“ warten.</List.Item>
+                                        <List.Item>Schritt 2: Code vom Host scannen oder einfügen.</List.Item>
                                     </List>
+                                    <Text size="xs" c="dimmed">
+                                        Nach dem Übernehmen wird die Antwort erzeugt und angezeigt.
+                                    </Text>
                                 </Stack>
                             </Card>
-                        </SimpleGrid>
-                        <Group grow>
-                            <Button
-                                variant={experimentalMode === 'offer' ? 'filled' : 'light'}
-                                onClick={() => {
-                                    resetExperimentalState();
-                                    setExperimentalMode('offer');
-                                }}
-                            >
-                                Angebot erstellen
-                            </Button>
-                            <Button
-                                variant={experimentalMode === 'answer' ? 'filled' : 'light'}
-                                onClick={() => {
-                                    resetExperimentalState();
-                                    setExperimentalMode('answer');
-                                }}
-                            >
-                                Antwort erstellen
-                            </Button>
-                        </Group>
+                        )}
                         <Text size="sm" c="dimmed">
                             Status: {p2pStatus}
                         </Text>
@@ -924,29 +959,34 @@ function App() {
                                 {p2pError}
                             </Text>
                         )}
-                        <Stack gap="xs">
-                            <Button
-                                onClick={() => {
-                                    ensureExperimentalPeer(experimentalMode === 'offer');
-                                }}
-                            >
-                                {experimentalMode === 'offer' ? 'Angebot erzeugen' : 'Antwort vorbereiten'}
-                            </Button>
-                            <Text size="xs" c="dimmed">
-                                {experimentalMode === 'offer'
-                                    ? 'Erzeuge das Angebot und teile es per QR-Code.'
-                                    : 'Scanne zuerst das Angebot und erzeuge danach die Antwort.'}
-                            </Text>
-                        </Stack>
+                        {p2pRole === 'host' && (
+                            <Stack gap="xs">
+                                <Button
+                                    onClick={() => {
+                                        resetExperimentalState();
+                                        ensureExperimentalPeer(true);
+                                    }}
+                                >
+                                    QR-Code neu erstellen
+                                </Button>
+                                <Text size="xs" c="dimmed">
+                                    Erstellt ein neues Angebot für den Host-QR-Code.
+                                </Text>
+                            </Stack>
+                        )}
                         {p2pQrCode && (
                             <Center>
-                                <img src={p2pQrCode} alt="Peer-to-Peer Signal QR-Code" style={{ width: 320 }} />
+                                <img
+                                    src={p2pQrCode}
+                                    alt="Peer-to-Peer Signal QR-Code"
+                                    style={{ width: 320 }}
+                                />
                             </Center>
                         )}
                         {p2pLocalSignal && (
                             <Stack gap={4}>
                                 <Text size="xs" c="dimmed">
-                                    Lokales Signal (zum Teilen): {p2pLocalSignal.slice(0, 180)}
+                                    Komprimiertes Signal (zum Teilen): {p2pLocalSignal.slice(0, 180)}
                                     {p2pLocalSignal.length > 180 ? '…' : ''}
                                 </Text>
                                 <Group gap="xs">
@@ -961,9 +1001,24 @@ function App() {
                                 </Group>
                             </Stack>
                         )}
-                        <Divider label="Signal vom Gegenüber" labelPosition="center" />
+                        <Divider
+                            label={
+                                p2pRole === 'host'
+                                    ? 'Antwort vom Client'
+                                    : p2pRole === 'client'
+                                      ? 'Angebot vom Host'
+                                      : 'Signal vom Gegenüber'
+                            }
+                            labelPosition="center"
+                        />
                         <TextInput
-                            placeholder="Signal/SDP einfügen"
+                            placeholder={
+                                p2pRole === 'host'
+                                    ? 'Antwort/Signal einfügen'
+                                    : p2pRole === 'client'
+                                      ? 'Angebot/Signal einfügen'
+                                      : 'Signal/SDP einfügen'
+                            }
                             value={p2pRemoteSignal}
                             onChange={(event) => setP2pRemoteSignal(event.currentTarget.value)}
                         />

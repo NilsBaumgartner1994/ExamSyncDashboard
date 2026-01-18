@@ -23,6 +23,7 @@
     "@yudiel/react-qr-scanner": "^2.5.0",
     "buffer": "^6.0.3",
     "clsx": "^2.1.1",
+    "pako": "^2.1.0",
     "peerjs": "^1.5.4",
     "process": "^0.11.10",
     "qrcode": "^1.5.4",
