@@ -8,6 +8,7 @@ import { TileWrapper } from './TileWrapper';
 export interface RoomStatus {
     name: string;
     needsHelp: boolean;
+    isResolved?: boolean;
 }
 
 interface RoomStatusTileProps {
@@ -27,9 +28,26 @@ const helpBlink = keyframes`
     background-color: #ffd43b;
   }
   50% {
-    background-color: #f03e3e;
+    background-color: #f1f3f5;
   }
 `;
+
+const baseBackgroundColor = '#f1f3f5';
+const alertBackgroundColor = '#ffd43b';
+const resolvedBackgroundColor = '#40c057';
+
+const getContrastTextColor = (hexColor: string) => {
+    const normalized = hexColor.replace('#', '');
+    const red = parseInt(normalized.slice(0, 2), 16);
+    const green = parseInt(normalized.slice(2, 4), 16);
+    const blue = parseInt(normalized.slice(4, 6), 16);
+    const [r, g, b] = [red, green, blue].map((channel) => {
+        const value = channel / 255;
+        return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+    });
+    const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    return luminance > 0.179 ? '#000' : '#fff';
+};
 
 export function RoomStatusTile({
     title,
@@ -54,15 +72,26 @@ export function RoomStatusTile({
     const roomRows = useMemo(
         () =>
             rooms.map((room, index) => {
+                const isResolved = Boolean(room.isResolved);
+                const backgroundColor = room.needsHelp
+                    ? baseBackgroundColor
+                    : isResolved
+                        ? resolvedBackgroundColor
+                        : baseBackgroundColor;
+                const textColor = getContrastTextColor(
+                    room.needsHelp ? alertBackgroundColor : backgroundColor,
+                );
                 const rowStyle = room.needsHelp
                     ? {
-                        animation: `${helpBlink} 1.2s infinite`,
-                        color: '#fff',
-                        border: '1px solid #f03e3e',
+                        animation: `${helpBlink} 1s infinite`,
+                        backgroundColor,
+                        border: '1px solid #f0c36d',
+                        color: textColor,
                     }
                     : {
-                        backgroundColor: '#f1f3f5',
+                        backgroundColor,
                         border: '1px solid #dee2e6',
+                        color: textColor,
                     };
 
                 return (
@@ -75,7 +104,7 @@ export function RoomStatusTile({
                             }}
                         >
                             <Group justify="space-between" wrap="nowrap">
-                                <Text fw={600} style={{ flex: 1 }}>
+                                <Text fw={600} style={{ flex: 1 }} c={textColor}>
                                     {room.name}
                                 </Text>
                                 <ActionIcon
@@ -87,24 +116,26 @@ export function RoomStatusTile({
                                 >
                                     <IconBell size={18} />
                                 </ActionIcon>
-                                <ActionIcon
-                                    size="lg"
-                                    variant="light"
-                                    color="green"
-                                    aria-label="Hilfe erledigt"
-                                    onClick={() => onClearHelp(room.name)}
-                                >
-                                    <IconCheck size={18} />
-                                </ActionIcon>
-                                <Button
-                                    size="xs"
-                                    color="red"
-                                    variant="light"
-                                    leftSection={<IconTrash size={14} />}
-                                    onClick={() => onRemoveRoom(room.name)}
-                                >
-                                    Entfernen
-                                </Button>
+                                <Group gap="sm">
+                                    <ActionIcon
+                                        size="lg"
+                                        variant="light"
+                                        color="green"
+                                        aria-label="Hilfe erledigt"
+                                        onClick={() => onClearHelp(room.name)}
+                                    >
+                                        <IconCheck size={18} />
+                                    </ActionIcon>
+                                    <ActionIcon
+                                        size="lg"
+                                        variant="light"
+                                        color="red"
+                                        aria-label="Raum entfernen"
+                                        onClick={() => onRemoveRoom(room.name)}
+                                    >
+                                        <IconTrash size={18} />
+                                    </ActionIcon>
+                                </Group>
                             </Group>
                         </Box>
                         {index < rooms.length - 1 && <Divider size="xs" />}
