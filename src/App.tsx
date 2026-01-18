@@ -59,6 +59,8 @@ function App() {
     const [lastHostStatus, setLastHostStatus] = useState<'idle' | 'checking' | 'reachable' | 'unreachable'>(
         'idle',
     );
+    const [autoJoinAttempted, setAutoJoinAttempted] = useState(false);
+    const initialRoomParamRef = useRef<string | null>(null);
 
     const tileDefinitions = [
         { key: 'link', label: 'Mein Raum-Link' },
@@ -335,9 +337,12 @@ function App() {
         const roomParam = params.get('roomId') ?? params.get('peerId');
         if (roomParam) {
             const normalized = normalizeRoomCode(roomParam);
+            initialRoomParamRef.current = normalized;
             setRoomIdInput(normalized);
             handleJoin(normalized);
+            return;
         }
+        initialRoomParamRef.current = null;
     }, []);
 
     useEffect(() => {
@@ -346,6 +351,21 @@ function App() {
             setLastConnectedHost(normalizeRoomCode(stored));
         }
     }, []);
+
+    useEffect(() => {
+        if (
+            autoJoinAttempted ||
+            initialRoomParamRef.current ||
+            !lastConnectedHost ||
+            connecting ||
+            joined
+        ) {
+            return;
+        }
+        setAutoJoinAttempted(true);
+        setRoomIdInput(lastConnectedHost);
+        handleJoin(lastConnectedHost);
+    }, [autoJoinAttempted, connecting, joined, lastConnectedHost]);
 
     useEffect(() => {
         if (scanOpened) {
