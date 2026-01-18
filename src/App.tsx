@@ -1,6 +1,8 @@
 // src/App.tsx
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Peer from 'peerjs';
+import SimplePeer from 'simple-peer';
+import QRCode from 'qrcode';
 import {
     AppShell,
     SimpleGrid,
@@ -67,6 +69,15 @@ function App() {
     const [showDebugProtocol, setShowDebugProtocol] = useState(false);
     const [lastHostsLoaded, setLastHostsLoaded] = useState(false);
     const [lastHostsLogged, setLastHostsLogged] = useState(false);
+    const [experimentalOpened, setExperimentalOpened] = useState(false);
+    const [experimentalMode, setExperimentalMode] = useState<'offer' | 'answer'>('offer');
+    const [p2pStatus, setP2pStatus] = useState('Bereit.');
+    const [p2pError, setP2pError] = useState('');
+    const [p2pLocalSignal, setP2pLocalSignal] = useState('');
+    const [p2pRemoteSignal, setP2pRemoteSignal] = useState('');
+    const [p2pQrCode, setP2pQrCode] = useState('');
+    const [p2pScanOpened, setP2pScanOpened] = useState(false);
+    const p2pPeerRef = useRef<SimplePeer.Instance | null>(null);
 
     const tileDefinitions = [
         { key: 'link', label: 'Mein Raum-Link' },
@@ -176,6 +187,67 @@ function App() {
             setupConnection(conn);
         }
     };
+
+    const resetExperimentalState = () => {
+        p2pPeerRef.current?.destroy();
+        p2pPeerRef.current = null;
+        setP2pStatus('Bereit.');
+        setP2pError('');
+        setP2pLocalSignal('');
+        setP2pRemoteSignal('');
+        setP2pQrCode('');
+    };
+
+    const ensureExperimentalPeer = (initiator: boolean) => {
+        if (p2pPeerRef.current) {
+            return;
+        }
+        const peer = new SimplePeer({ initiator, trickle: false });
+        p2pPeerRef.current = peer;
+        setP2pStatus(initiator ? 'Angebot wird erstellt…' : 'Warte auf Angebot…');
+        peer.on('signal', (data) => {
+            const payload = JSON.stringify(data);
+            setP2pLocalSignal(payload);
+            setP2pStatus(initiator ? 'Angebot bereit.' : 'Antwort bereit.');
+        });
+        peer.on('connect', () => {
+            setP2pStatus('Peer-to-Peer verbunden.');
+        });
+        peer.on('close', () => {
+            setP2pStatus('Verbindung geschlossen.');
+        });
+        peer.on('error', (error) => {
+            setP2pError(`Peer-Fehler: ${error.message}`);
+        });
+    };
+
+    const applyExperimentalSignal = (rawSignal: string) => {
+        if (!rawSignal.trim()) return;
+        try {
+            const parsed = JSON.parse(rawSignal);
+            if (!p2pPeerRef.current) {
+                ensureExperimentalPeer(false);
+            }
+            p2pPeerRef.current?.signal(parsed);
+            setP2pStatus('Signal verarbeitet.');
+            setP2pError('');
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unbekannter Fehler';
+            setP2pError(`Signal konnte nicht gelesen werden: ${message}`);
+        }
+    };
+
+    useEffect(() => {
+        if (!p2pLocalSignal) {
+            setP2pQrCode('');
+            return;
+        }
+        QRCode.toDataURL(p2pLocalSignal, { margin: 2, width: 256 })
+            .then((url) => setP2pQrCode(url))
+            .catch((error) => {
+                setP2pError(`QR-Code konnte nicht erstellt werden: ${error instanceof Error ? error.message : 'Fehler'}`);
+            });
+    }, [p2pLocalSignal]);
 
     const sendNotesState = (conn?: Peer.DataConnection) => {
         if (!isHost) return;
@@ -787,6 +859,16 @@ function App() {
                         {createRoomDebug}
                         {createRoomError ? ` Fehler: ${createRoomError}` : ''}
                     </Text>
+                    <Divider my="sm" label="Experimentell" labelPosition="center" />
+                    <Button
+                        variant="light"
+                        onClick={() => {
+                            resetExperimentalState();
+                            setExperimentalOpened(true);
+                        }}
+                    >
+                        Experimental Peer-to-Peer
+                    </Button>
                 </Stack>
                 <Modal
                     opened={scanOpened}
@@ -813,6 +895,124 @@ function App() {
                                 {scanError}
                             </Text>
                         )}
+                    </Stack>
+                </Modal>
+                <Modal
+                    opened={experimentalOpened}
+                    onClose={() => {
+                        setExperimentalOpened(false);
+                        resetExperimentalState();
+                    }}
+                    title="Experimental Peer-to-Peer (ohne Server)"
+                    centered
+                    size="lg"
+                >
+                    <Stack>
+                        <Text size="sm">
+                            Dieser Modus nutzt manuelles SDP/ICE-Sharing per QR-Code (ohne Signaling-Server).
+                            Beide Geräte tauschen nacheinander Angebot und Antwort aus.
+                        </Text>
+                        <Group grow>
+                            <Button
+                                variant={experimentalMode === 'offer' ? 'filled' : 'light'}
+                                onClick={() => {
+                                    resetExperimentalState();
+                                    setExperimentalMode('offer');
+                                }}
+                            >
+                                Angebot erstellen
+                            </Button>
+                            <Button
+                                variant={experimentalMode === 'answer' ? 'filled' : 'light'}
+                                onClick={() => {
+                                    resetExperimentalState();
+                                    setExperimentalMode('answer');
+                                }}
+                            >
+                                Antwort erstellen
+                            </Button>
+                        </Group>
+                        <Text size="sm" c="dimmed">
+                            Status: {p2pStatus}
+                        </Text>
+                        {p2pError && (
+                            <Text size="sm" c="red">
+                                {p2pError}
+                            </Text>
+                        )}
+                        <Stack gap="xs">
+                            <Button
+                                onClick={() => {
+                                    ensureExperimentalPeer(experimentalMode === 'offer');
+                                }}
+                            >
+                                {experimentalMode === 'offer' ? 'Angebot erzeugen' : 'Antwort vorbereiten'}
+                            </Button>
+                            <Text size="xs" c="dimmed">
+                                {experimentalMode === 'offer'
+                                    ? 'Erzeuge das Angebot und teile es per QR-Code.'
+                                    : 'Scanne zuerst das Angebot und erzeuge danach die Antwort.'}
+                            </Text>
+                        </Stack>
+                        {p2pQrCode && (
+                            <Center>
+                                <img src={p2pQrCode} alt="Peer-to-Peer Signal QR-Code" style={{ width: 200 }} />
+                            </Center>
+                        )}
+                        {p2pLocalSignal && (
+                            <Text size="xs" c="dimmed">
+                                Lokales Signal (zum Teilen): {p2pLocalSignal.slice(0, 180)}
+                                {p2pLocalSignal.length > 180 ? '…' : ''}
+                            </Text>
+                        )}
+                        <Divider label="Signal vom Gegenüber" labelPosition="center" />
+                        <TextInput
+                            placeholder="Signal/SDP einfügen"
+                            value={p2pRemoteSignal}
+                            onChange={(event) => setP2pRemoteSignal(event.currentTarget.value)}
+                        />
+                        <Group grow>
+                            <Button
+                                variant="light"
+                                onClick={() => applyExperimentalSignal(p2pRemoteSignal)}
+                            >
+                                Signal übernehmen
+                            </Button>
+                            <Button
+                                variant="light"
+                                onClick={() => setP2pScanOpened(true)}
+                            >
+                                QR-Code scannen
+                            </Button>
+                        </Group>
+                        <Modal
+                            opened={p2pScanOpened}
+                            onClose={() => setP2pScanOpened(false)}
+                            title="Signal-QR-Code scannen"
+                            centered
+                        >
+                            <Stack>
+                                <Text size="sm">QR-Code des Gegenübers scannen.</Text>
+                                {p2pScanOpened && (
+                                    <Scanner
+                                        onScan={(result) => {
+                                            if (!result?.[0]?.rawValue) return;
+                                            const value = result[0].rawValue;
+                                            setP2pRemoteSignal(value);
+                                            applyExperimentalSignal(value);
+                                            setP2pScanOpened(false);
+                                        }}
+                                        onError={() => setP2pError('Kamera konnte nicht gestartet werden.')}
+                                        constraints={{ facingMode: 'environment' }}
+                                        formats={['qr_code']}
+                                        styles={{
+                                            container: { width: '100%', borderRadius: 8, overflow: 'hidden' },
+                                            video: { width: '100%' },
+                                        }}
+                                    />
+                                )}
+                            </Stack>
+                        </Modal>
                     </Stack>
                 </Modal>
             </Container>
