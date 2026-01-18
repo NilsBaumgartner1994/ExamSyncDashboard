@@ -461,6 +461,17 @@ function App() {
                                 return next;
                             });
                         }}
+                        onResetStatus={(name) => {
+                            setRoomStatuses((prev) => {
+                                const next = prev.map((room) =>
+                                    room.name === name
+                                        ? { ...room, needsHelp: false, isResolved: false }
+                                        : room,
+                                );
+                                broadcastRoomStatuses(next);
+                                return next;
+                            });
+                        }}
                         onRemoveRoom={(name) => {
                             setRoomStatuses((prev) => {
                                 const next = prev.filter((room) => room.name !== name);

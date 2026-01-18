@@ -17,18 +17,19 @@ interface RoomStatusTileProps {
     onAddRoom: (name: string) => void;
     onToggleHelp: (name: string) => void;
     onClearHelp: (name: string) => void;
+    onResetStatus: (name: string) => void;
     onRemoveRoom: (name: string) => void;
     defaultSpan?: number;
     onSpanChange?: (span: number) => void;
     onClose?: () => void;
 }
 
-const helpBlink = keyframes`
+const bellBlink = keyframes`
   0%, 100% {
     background-color: #ffd43b;
   }
   50% {
-    background-color: #f1f3f5;
+    background-color: transparent;
   }
 `;
 
@@ -55,6 +56,7 @@ export function RoomStatusTile({
     onAddRoom,
     onToggleHelp,
     onClearHelp,
+    onResetStatus,
     onRemoveRoom,
     defaultSpan = 2,
     onSpanChange,
@@ -73,26 +75,17 @@ export function RoomStatusTile({
         () =>
             rooms.map((room, index) => {
                 const isResolved = Boolean(room.isResolved);
-                const backgroundColor = room.needsHelp
-                    ? baseBackgroundColor
-                    : isResolved
-                        ? resolvedBackgroundColor
-                        : baseBackgroundColor;
+                const isActive = room.needsHelp || isResolved;
+                const backgroundColor = isResolved ? resolvedBackgroundColor : baseBackgroundColor;
                 const textColor = getContrastTextColor(
                     room.needsHelp ? alertBackgroundColor : backgroundColor,
                 );
-                const rowStyle = room.needsHelp
-                    ? {
-                        animation: `${helpBlink} 1s infinite`,
-                        backgroundColor,
-                        border: '1px solid #f0c36d',
-                        color: textColor,
-                    }
-                    : {
-                        backgroundColor,
-                        border: '1px solid #dee2e6',
-                        color: textColor,
-                    };
+                const rowStyle = {
+                    backgroundColor,
+                    border: `1px solid ${isActive ? '#000' : '#dee2e6'}`,
+                    color: textColor,
+                    cursor: isActive ? 'pointer' : 'default',
+                };
 
                 return (
                     <Fragment key={`${room.name}-${index}`}>
@@ -101,6 +94,18 @@ export function RoomStatusTile({
                                 ...rowStyle,
                                 borderRadius: 8,
                                 padding: '8px 12px',
+                            }}
+                            onClick={() => {
+                                if (isActive) onResetStatus(room.name);
+                            }}
+                            role={isActive ? 'button' : undefined}
+                            tabIndex={isActive ? 0 : undefined}
+                            onKeyDown={(event) => {
+                                if (!isActive) return;
+                                if (event.key === 'Enter' || event.key === ' ') {
+                                    event.preventDefault();
+                                    onResetStatus(room.name);
+                                }
                             }}
                         >
                             <Group justify="space-between" wrap="nowrap">
@@ -112,7 +117,14 @@ export function RoomStatusTile({
                                     variant={room.needsHelp ? 'filled' : 'light'}
                                     color={room.needsHelp ? 'yellow' : 'gray'}
                                     aria-label="Hilfe anfordern"
-                                    onClick={() => onToggleHelp(room.name)}
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        onToggleHelp(room.name);
+                                    }}
+                                    style={{
+                                        border: '1px solid #000',
+                                        animation: room.needsHelp ? `${bellBlink} 1s infinite` : undefined,
+                                    }}
                                 >
                                     <IconBell size={18} />
                                 </ActionIcon>
@@ -122,7 +134,11 @@ export function RoomStatusTile({
                                         variant="light"
                                         color="green"
                                         aria-label="Hilfe erledigt"
-                                        onClick={() => onClearHelp(room.name)}
+                                        onClick={(event) => {
+                                            event.stopPropagation();
+                                            onClearHelp(room.name);
+                                        }}
+                                        style={{ border: '1px solid #000' }}
                                     >
                                         <IconCheck size={18} />
                                     </ActionIcon>
@@ -131,7 +147,12 @@ export function RoomStatusTile({
                                         variant="light"
                                         color="red"
                                         aria-label="Raum entfernen"
-                                        onClick={() => onRemoveRoom(room.name)}
+                                        onClick={(event) => {
+                                            event.stopPropagation();
+                                            onRemoveRoom(room.name);
+                                        }}
+                                        disabled={isActive}
+                                        style={{ border: '1px solid #000' }}
                                     >
                                         <IconTrash size={18} />
                                     </ActionIcon>
@@ -142,7 +163,7 @@ export function RoomStatusTile({
                     </Fragment>
                 );
             }),
-        [rooms, onToggleHelp, onClearHelp, onRemoveRoom],
+        [rooms, onToggleHelp, onClearHelp, onResetStatus, onRemoveRoom],
     );
 
     return (
@@ -164,7 +185,12 @@ export function RoomStatusTile({
                     onChange={(event) => setRoomInput(event.currentTarget.value)}
                     onKeyDown={(event) => event.key === 'Enter' && handleAdd()}
                 />
-                <Button onClick={handleAdd} disabled={!roomInput.trim()} fullWidth>
+                <Button
+                    onClick={handleAdd}
+                    disabled={!roomInput.trim()}
+                    fullWidth
+                    style={{ border: '1px solid #000' }}
+                >
                     Raum hinzufügen
                 </Button>
             </Stack>
