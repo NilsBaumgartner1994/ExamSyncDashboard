@@ -17,6 +17,9 @@ import {
     Center,
     Modal,
     Group,
+    Card,
+    List,
+    Textarea,
 } from '@mantine/core';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import { TimerTile } from './components/TimerTile';
@@ -68,7 +71,6 @@ function App() {
     const [showDebugProtocol, setShowDebugProtocol] = useState(false);
     const [lastHostsLoaded, setLastHostsLoaded] = useState(false);
     const [lastHostsLogged, setLastHostsLogged] = useState(false);
-    const [experimentalOpened, setExperimentalOpened] = useState(false);
     const [experimentalMode, setExperimentalMode] = useState<'offer' | 'answer'>('offer');
     const [p2pStatus, setP2pStatus] = useState('Bereit.');
     const [p2pError, setP2pError] = useState('');
@@ -77,6 +79,12 @@ function App() {
     const [p2pQrCode, setP2pQrCode] = useState('');
     const [p2pScanOpened, setP2pScanOpened] = useState(false);
     const [p2pSignalCopied, setP2pSignalCopied] = useState(false);
+    const [p2pConnected, setP2pConnected] = useState(false);
+    const [p2pChatInput, setP2pChatInput] = useState('');
+    const [p2pChatMessages, setP2pChatMessages] = useState<
+        Array<{ id: string; user: string; text: string }>
+    >([]);
+    const [authScreen, setAuthScreen] = useState<'join' | 'experimental'>('join');
     const p2pPeerRef = useRef<SimplePeer.Instance | null>(null);
     const p2pCopyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -198,6 +206,9 @@ function App() {
         setP2pRemoteSignal('');
         setP2pQrCode('');
         setP2pSignalCopied(false);
+        setP2pConnected(false);
+        setP2pChatInput('');
+        setP2pChatMessages([]);
         if (p2pCopyTimeoutRef.current) {
             clearTimeout(p2pCopyTimeoutRef.current);
             p2pCopyTimeoutRef.current = null;
@@ -218,12 +229,46 @@ function App() {
         });
         peer.on('connect', () => {
             setP2pStatus('Peer-to-Peer verbunden.');
+            setP2pConnected(true);
+            setP2pChatMessages((prev) => [
+                ...prev,
+                {
+                    id: `${Date.now()}-connected`,
+                    user: 'Debug',
+                    text: 'Datenkanal geöffnet.',
+                },
+            ]);
         });
         peer.on('close', () => {
             setP2pStatus('Verbindung geschlossen.');
+            setP2pConnected(false);
         });
         peer.on('error', (error) => {
             setP2pError(`Peer-Fehler: ${error.message}`);
+        });
+        peer.on('data', (data) => {
+            try {
+                const payload = JSON.parse(String(data));
+                if (payload?.type === 'chat') {
+                    setP2pChatMessages((prev) => [
+                        ...prev,
+                        {
+                            id: `${Date.now()}-remote`,
+                            user: 'Gegenüber',
+                            text: String(payload.text ?? ''),
+                        },
+                    ]);
+                }
+            } catch (error) {
+                setP2pChatMessages((prev) => [
+                    ...prev,
+                    {
+                        id: `${Date.now()}-remote-raw`,
+                        user: 'Debug',
+                        text: `Unlesbare Daten empfangen: ${String(data).slice(0, 200)}`,
+                    },
+                ]);
+            }
         });
     };
 
@@ -807,129 +852,50 @@ function App() {
     }
 
     if (!joined) {
-        return (
-            <Container size="xs" mt="xl">
-                <Title order={2} mb="md">Prüfungsaufsichts-Dashboard</Title>
-                <Stack>
-                    <Divider my="sm" label="Raum beitreten" labelPosition="center" />
-
-                    <TextInput
-                        placeholder="Raum-Code eingeben"
-                        value={roomIdInput}
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        onChange={(e) => setRoomIdInput(normalizeRoomCode(e.currentTarget.value))}
-                    />
-                    <Group grow>
-                        <Button onClick={() => handleJoin(roomIdInput)}>Beitreten</Button>
-                        <Button variant="light" onClick={() => setScanOpened(true)}>
-                            QR-Code scannen
-                        </Button>
-                    </Group>
-                    <Divider my="sm" label="Zuletzt verbunden mit" labelPosition="center" />
-                    {lastConnectedHost ? (
-                        <Stack gap="xs">
-                            <Button variant="outline" onClick={() => handleJoin(lastConnectedHost)}>
-                                {formatRoomIdForDisplay(lastConnectedHost)}
-                            </Button>
-                            <Text
-                                size="sm"
-                                c={
-                                    lastHostStatus === 'reachable'
-                                        ? 'green'
-                                        : lastHostStatus === 'unreachable'
-                                          ? 'red'
-                                          : 'dimmed'
-                                }
-                            >
-                                {lastHostStatus === 'checking'
-                                    ? 'Erreichbarkeit des letzten Raums wird geprüft...'
-                                    : lastHostStatus === 'reachable'
-                                      ? 'Letzter Raum erreichbar'
-                                      : 'Letzter Raum antwortet nicht'}
-                            </Text>
-                        </Stack>
-                    ) : (
-                        <Text size="sm" c="dimmed">
-                            Kein zuletzt verbundener Raum gespeichert.
-                        </Text>
-                    )}
-                    {lastConnectedHosts.length > 0 && (
-                        <>
-                            <Divider my="sm" label="Zuletzt beigetretene Räume" labelPosition="center" />
-                            <Group gap="xs" wrap="wrap">
-                                {lastConnectedHosts.map((hostId) => (
-                                    <Button
-                                        key={hostId}
-                                        variant={hostId === lastConnectedHost ? 'outline' : 'light'}
-                                        onClick={() => handleJoin(hostId)}
-                                    >
-                                        {formatRoomIdForDisplay(hostId)}
-                                    </Button>
-                                ))}
-                            </Group>
-                        </>
-                    )}
-
-                    <Divider my="sm" label="Oder neuen Link erstellen" labelPosition="center" />
-                    <Button onClick={() => handleJoin()}>Eigenen Link erstellen</Button>
-                    <Text size="xs" c={createRoomError ? 'red' : 'dimmed'}>
-                        {createRoomDebug}
-                        {createRoomError ? ` Fehler: ${createRoomError}` : ''}
-                    </Text>
-                    <Divider my="sm" label="Experimentell" labelPosition="center" />
-                    <Button
-                        variant="light"
-                        onClick={() => {
-                            resetExperimentalState();
-                            setExperimentalOpened(true);
-                        }}
-                    >
-                        Experimental Peer-to-Peer
-                    </Button>
-                </Stack>
-                <Modal
-                    opened={scanOpened}
-                    onClose={() => setScanOpened(false)}
-                    title="QR-Code scannen"
-                    centered
-                >
+        if (authScreen === 'experimental') {
+            return (
+                <Container size="md" mt="xl">
                     <Stack>
-                        <Text size="sm">Kamera auf den QR-Code mit dem Raum-Link richten.</Text>
-                        {scanOpened && (
-                            <Scanner
-                                onScan={handleScan}
-                                onError={() => setScanError('Kamera konnte nicht gestartet werden.')}
-                                constraints={{ facingMode: 'environment' }}
-                                formats={['qr_code']}
-                                styles={{
-                                    container: { width: '100%', borderRadius: 8, overflow: 'hidden' },
-                                    video: { width: '100%' },
+                        <Group justify="space-between">
+                            <Title order={2}>Experimental Peer-to-Peer</Title>
+                            <Button
+                                variant="light"
+                                onClick={() => {
+                                    resetExperimentalState();
+                                    setAuthScreen('join');
                                 }}
-                            />
-                        )}
-                        {scanError && (
-                            <Text size="sm" c="red">
-                                {scanError}
-                            </Text>
-                        )}
-                    </Stack>
-                </Modal>
-                <Modal
-                    opened={experimentalOpened}
-                    onClose={() => {
-                        setExperimentalOpened(false);
-                        resetExperimentalState();
-                    }}
-                    title="Experimental Peer-to-Peer (ohne Server)"
-                    centered
-                    size="lg"
-                >
-                    <Stack>
-                        <Text size="sm">
+                            >
+                                Zurück zum Login
+                            </Button>
+                        </Group>
+                        <Text size="sm" c="dimmed">
                             Dieser Modus nutzt manuelles SDP/ICE-Sharing per QR-Code (ohne Signaling-Server).
                             Beide Geräte tauschen nacheinander Angebot und Antwort aus.
                         </Text>
+                        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
+                            <Card shadow="sm" radius="md" withBorder>
+                                <Stack gap="xs">
+                                    <Title order={4}>Host (Angebot)</Title>
+                                    <List size="sm" spacing="xs">
+                                        <List.Item>„Angebot erstellen“ wählen.</List.Item>
+                                        <List.Item>Angebot erzeugen und QR-Code teilen.</List.Item>
+                                        <List.Item>Antwort vom Client scannen oder einfügen.</List.Item>
+                                        <List.Item>Auf „verbunden“ warten.</List.Item>
+                                    </List>
+                                </Stack>
+                            </Card>
+                            <Card shadow="sm" radius="md" withBorder>
+                                <Stack gap="xs">
+                                    <Title order={4}>Client (Antwort)</Title>
+                                    <List size="sm" spacing="xs">
+                                        <List.Item>„Antwort erstellen“ wählen.</List.Item>
+                                        <List.Item>Angebot scannen/einfügen.</List.Item>
+                                        <List.Item>Antwort erzeugen und zurückteilen.</List.Item>
+                                        <List.Item>Auf „verbunden“ warten.</List.Item>
+                                    </List>
+                                </Stack>
+                            </Card>
+                        </SimpleGrid>
                         <Group grow>
                             <Button
                                 variant={experimentalMode === 'offer' ? 'filled' : 'light'}
@@ -1015,34 +981,198 @@ function App() {
                                 QR-Code scannen
                             </Button>
                         </Group>
-                        <Modal
-                            opened={p2pScanOpened}
-                            onClose={() => setP2pScanOpened(false)}
-                            title="Signal-QR-Code scannen"
-                            centered
-                        >
-                            <Stack>
-                                <Text size="sm">QR-Code des Gegenübers scannen.</Text>
-                                {p2pScanOpened && (
-                                    <Scanner
-                                        onScan={(result) => {
-                                            if (!result?.[0]?.rawValue) return;
-                                            const value = result[0].rawValue;
-                                            setP2pRemoteSignal(value);
-                                            applyExperimentalSignal(value);
-                                            setP2pScanOpened(false);
-                                        }}
-                                        onError={() => setP2pError('Kamera konnte nicht gestartet werden.')}
-                                        constraints={{ facingMode: 'environment' }}
-                                        formats={['qr_code']}
-                                        styles={{
-                                            container: { width: '100%', borderRadius: 8, overflow: 'hidden' },
-                                            video: { width: '100%' },
-                                        }}
+                        {p2pConnected && (
+                            <Card shadow="sm" radius="md" withBorder>
+                                <Stack gap="xs">
+                                    <Title order={5}>Chat</Title>
+                                    <Stack gap={4}>
+                                        {p2pChatMessages.length === 0 ? (
+                                            <Text size="sm" c="dimmed">
+                                                Noch keine Nachrichten.
+                                            </Text>
+                                        ) : (
+                                            p2pChatMessages.map((message) => (
+                                                <Text size="sm" key={message.id}>
+                                                    <strong>{message.user}:</strong> {message.text}
+                                                </Text>
+                                            ))
+                                        )}
+                                    </Stack>
+                                    <Textarea
+                                        minRows={2}
+                                        placeholder="Nachricht senden"
+                                        value={p2pChatInput}
+                                        onChange={(event) => setP2pChatInput(event.currentTarget.value)}
                                     />
-                                )}
-                            </Stack>
-                        </Modal>
+                                    <Group justify="space-between">
+                                        <Text size="xs" c="dimmed">
+                                            Debug: {p2pStatus}
+                                            {p2pError ? ` | ${p2pError}` : ''}
+                                        </Text>
+                                        <Button
+                                            size="xs"
+                                            onClick={() => {
+                                                if (!p2pChatInput.trim()) return;
+                                                const payload = {
+                                                    type: 'chat',
+                                                    text: p2pChatInput.trim(),
+                                                };
+                                                p2pPeerRef.current?.send(JSON.stringify(payload));
+                                                setP2pChatMessages((prev) => [
+                                                    ...prev,
+                                                    {
+                                                        id: `${Date.now()}-local`,
+                                                        user: 'Ich',
+                                                        text: payload.text,
+                                                    },
+                                                ]);
+                                                setP2pChatInput('');
+                                            }}
+                                        >
+                                            Senden
+                                        </Button>
+                                    </Group>
+                                </Stack>
+                            </Card>
+                        )}
+                    </Stack>
+                    <Modal
+                        opened={p2pScanOpened}
+                        onClose={() => setP2pScanOpened(false)}
+                        title="Signal-QR-Code scannen"
+                        centered
+                    >
+                        <Stack>
+                            <Text size="sm">QR-Code des Gegenübers scannen.</Text>
+                            {p2pScanOpened && (
+                                <Scanner
+                                    onScan={(result) => {
+                                        if (!result?.[0]?.rawValue) return;
+                                        const value = result[0].rawValue;
+                                        setP2pRemoteSignal(value);
+                                        applyExperimentalSignal(value);
+                                        setP2pScanOpened(false);
+                                    }}
+                                    onError={() => setP2pError('Kamera konnte nicht gestartet werden.')}
+                                    constraints={{ facingMode: 'environment' }}
+                                    formats={['qr_code']}
+                                    styles={{
+                                        container: { width: '100%', borderRadius: 8, overflow: 'hidden' },
+                                        video: { width: '100%' },
+                                    }}
+                                />
+                            )}
+                        </Stack>
+                    </Modal>
+                </Container>
+            );
+        }
+        return (
+            <Container size="xs" mt="xl">
+                <Title order={2} mb="md">Prüfungsaufsichts-Dashboard</Title>
+                <Stack>
+                    <Divider my="sm" label="Raum beitreten" labelPosition="center" />
+
+                    <TextInput
+                        placeholder="Raum-Code eingeben"
+                        value={roomIdInput}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        onChange={(e) => setRoomIdInput(normalizeRoomCode(e.currentTarget.value))}
+                    />
+                    <Group grow>
+                        <Button onClick={() => handleJoin(roomIdInput)}>Beitreten</Button>
+                        <Button variant="light" onClick={() => setScanOpened(true)}>
+                            QR-Code scannen
+                        </Button>
+                    </Group>
+                    <Divider my="sm" label="Zuletzt verbunden mit" labelPosition="center" />
+                    {lastConnectedHost ? (
+                        <Stack gap="xs">
+                            <Button variant="outline" onClick={() => handleJoin(lastConnectedHost)}>
+                                {formatRoomIdForDisplay(lastConnectedHost)}
+                            </Button>
+                            <Text
+                                size="sm"
+                                c={
+                                    lastHostStatus === 'reachable'
+                                        ? 'green'
+                                        : lastHostStatus === 'unreachable'
+                                          ? 'red'
+                                          : 'dimmed'
+                                }
+                            >
+                                {lastHostStatus === 'checking'
+                                    ? 'Erreichbarkeit des letzten Raums wird geprüft...'
+                                    : lastHostStatus === 'reachable'
+                                      ? 'Letzter Raum erreichbar'
+                                      : 'Letzter Raum antwortet nicht'}
+                            </Text>
+                        </Stack>
+                    ) : (
+                        <Text size="sm" c="dimmed">
+                            Kein zuletzt verbundener Raum gespeichert.
+                        </Text>
+                    )}
+                    {lastConnectedHosts.length > 0 && (
+                        <>
+                            <Divider my="sm" label="Zuletzt beigetretene Räume" labelPosition="center" />
+                            <Group gap="xs" wrap="wrap">
+                                {lastConnectedHosts.map((hostId) => (
+                                    <Button
+                                        key={hostId}
+                                        variant={hostId === lastConnectedHost ? 'outline' : 'light'}
+                                        onClick={() => handleJoin(hostId)}
+                                    >
+                                        {formatRoomIdForDisplay(hostId)}
+                                    </Button>
+                                ))}
+                            </Group>
+                        </>
+                    )}
+
+                    <Divider my="sm" label="Oder neuen Link erstellen" labelPosition="center" />
+                    <Button onClick={() => handleJoin()}>Eigenen Link erstellen</Button>
+                    <Text size="xs" c={createRoomError ? 'red' : 'dimmed'}>
+                        {createRoomDebug}
+                        {createRoomError ? ` Fehler: ${createRoomError}` : ''}
+                    </Text>
+                    <Divider my="sm" label="Experimentell" labelPosition="center" />
+                    <Button
+                        variant="light"
+                        onClick={() => {
+                            resetExperimentalState();
+                            setAuthScreen('experimental');
+                        }}
+                    >
+                        Experimental Peer-to-Peer
+                    </Button>
+                </Stack>
+                <Modal
+                    opened={scanOpened}
+                    onClose={() => setScanOpened(false)}
+                    title="QR-Code scannen"
+                    centered
+                >
+                    <Stack>
+                        <Text size="sm">Kamera auf den QR-Code mit dem Raum-Link richten.</Text>
+                        {scanOpened && (
+                            <Scanner
+                                onScan={handleScan}
+                                onError={() => setScanError('Kamera konnte nicht gestartet werden.')}
+                                constraints={{ facingMode: 'environment' }}
+                                formats={['qr_code']}
+                                styles={{
+                                    container: { width: '100%', borderRadius: 8, overflow: 'hidden' },
+                                    video: { width: '100%' },
+                                }}
+                            />
+                        )}
+                        {scanError && (
+                            <Text size="sm" c="red">
+                                {scanError}
+                            </Text>
+                        )}
                     </Stack>
                 </Modal>
             </Container>
