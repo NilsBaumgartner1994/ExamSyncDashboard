@@ -1,8 +1,7 @@
 // src/components/RoomStatusTile.tsx
-import React, { Fragment, useMemo, useState } from 'react';
+import React, { Fragment, useEffect, useMemo, useState } from 'react';
 import { ActionIcon, Button, Divider, Group, Stack, Text, TextInput, Box } from '@mantine/core';
 import { IconBell, IconCheck, IconTrash } from '@tabler/icons-react';
-import { keyframes } from '@emotion/react';
 import { TileWrapper } from './TileWrapper';
 
 export interface RoomStatus {
@@ -24,17 +23,9 @@ interface RoomStatusTileProps {
     onClose?: () => void;
 }
 
-const bellBlink = keyframes`
-  0%, 100% {
-    background-color: #ffd43b;
-  }
-  50% {
-    background-color: #fff3bf;
-  }
-`;
-
 const baseBackgroundColor = '#f1f3f5';
 const alertBackgroundColor = '#ffd43b';
+const alertBackgroundAltColor = '#fff3bf';
 const resolvedBackgroundColor = '#40c057';
 
 const getContrastTextColor = (hexColor: string) => {
@@ -63,6 +54,20 @@ export function RoomStatusTile({
     onClose,
 }: RoomStatusTileProps) {
     const [roomInput, setRoomInput] = useState('');
+    const [blinkOn, setBlinkOn] = useState(true);
+
+    useEffect(() => {
+        if (!rooms.some((room) => room.needsHelp)) {
+            setBlinkOn(true);
+            return undefined;
+        }
+
+        const interval = window.setInterval(() => {
+            setBlinkOn((current) => !current);
+        }, 1000);
+
+        return () => window.clearInterval(interval);
+    }, [rooms]);
 
     const handleAdd = () => {
         const trimmed = roomInput.trim();
@@ -123,12 +128,16 @@ export function RoomStatusTile({
                                     }}
                                     style={{
                                         border: '1px solid #000',
-                                        animation: room.needsHelp ? `${bellBlink} 1s infinite` : undefined,
+                                        backgroundColor: room.needsHelp
+                                            ? blinkOn
+                                                ? alertBackgroundColor
+                                                : alertBackgroundAltColor
+                                            : undefined,
                                     }}
                                 >
                                     <IconBell size={18} />
                                 </ActionIcon>
-                                <Group gap="sm">
+                                <Group gap="lg">
                                     <ActionIcon
                                         size="lg"
                                         variant="filled"
@@ -166,7 +175,7 @@ export function RoomStatusTile({
                     </Fragment>
                 );
             }),
-        [rooms, onToggleHelp, onClearHelp, onResetStatus, onRemoveRoom],
+        [rooms, blinkOn, onToggleHelp, onClearHelp, onResetStatus, onRemoveRoom],
     );
 
     return (
