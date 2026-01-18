@@ -1,6 +1,6 @@
 // src/components/ToiletTile.tsx
 import React, { Fragment, useMemo, useState } from 'react';
-import { ActionIcon, Button, Center, Divider, Group, Stack, Text, TextInput } from '@mantine/core';
+import { ActionIcon, Button, Center, Checkbox, Divider, Group, Stack, Text, TextInput } from '@mantine/core';
 import { IconEye, IconToiletPaper } from '@tabler/icons-react';
 import { TileWrapper } from './TileWrapper';
 
@@ -9,6 +9,8 @@ type ToiletViewMode = 'admin' | 'exam';
 interface ToiletTileProps {
     title: string;
     occupants: string[];
+    isBlocked: boolean;
+    onToggleBlocked: (next: boolean) => void;
     onOccupy: (name: string) => void;
     onRelease: (name: string) => void;
     defaultSpan?: number;
@@ -17,14 +19,16 @@ interface ToiletTileProps {
 }
 
 export function ToiletTile({
-                               title,
-                               occupants,
-                               onOccupy,
-                               onRelease,
-                               defaultSpan = 2,
-                               onSpanChange,
-                               onClose,
-                           }: ToiletTileProps) {
+    title,
+    occupants,
+    isBlocked,
+    onToggleBlocked,
+    onOccupy,
+    onRelease,
+    defaultSpan = 2,
+    onSpanChange,
+    onClose,
+}: ToiletTileProps) {
     const [viewMode, setViewMode] = useState<ToiletViewMode>('admin');
     const [nameInput, setNameInput] = useState('');
     const isOccupied = occupants.length > 0;
@@ -65,7 +69,23 @@ export function ToiletTile({
             {viewMode === 'exam' ? (
                 <Center>
                     <Stack align="center" gap="xs">
-                        <IconToiletPaper size={48} />
+                        <div style={{ position: 'relative', width: 56, height: 56 }}>
+                            <IconToiletPaper size={48} style={{ position: 'absolute', inset: 4 }} />
+                            {isBlocked && (
+                                <div
+                                    style={{
+                                        position: 'absolute',
+                                        top: '50%',
+                                        left: '-10%',
+                                        width: '120%',
+                                        height: 4,
+                                        backgroundColor: '#fa5252',
+                                        transform: 'rotate(-45deg)',
+                                        transformOrigin: 'center',
+                                    }}
+                                />
+                            )}
+                        </div>
                         <Text fw={600}>{statusLabel}</Text>
                     </Stack>
                 </Center>
@@ -104,6 +124,11 @@ export function ToiletTile({
                     <Button onClick={handleOccupy} disabled={!nameInput.trim()} fullWidth>
                         Auf Toilette eintragen
                     </Button>
+                    <Checkbox
+                        label="Toilettengang nicht möglich"
+                        checked={isBlocked}
+                        onChange={(event) => onToggleBlocked(event.currentTarget.checked)}
+                    />
                 </Stack>
             )}
         </TileWrapper>

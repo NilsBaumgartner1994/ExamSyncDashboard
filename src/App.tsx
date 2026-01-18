@@ -36,6 +36,7 @@ function App() {
     const [connecting, setConnecting] = useState(false);
     const [connectionStatus, setConnectionStatus] = useState('');
     const [toiletOccupants, setToiletOccupants] = useState<string[]>([]);
+    const [toiletBlocked, setToiletBlocked] = useState(false);
     const [roomStatuses, setRoomStatuses] = useState<RoomStatus[]>([]);
     const [examEnd, setExamEnd] = useState<Date | null>(null);
     const [examWarningMinutes, setExamWarningMinutes] = useState(5);
@@ -242,6 +243,7 @@ function App() {
             broadcast('examEnd', examEnd);
             broadcast('examWarningMinutes', examWarningMinutes);
             broadcast('tiles', tiles);
+            conn.send(JSON.stringify({ type: 'toilet-blocked', data: toiletBlocked }));
             conn.send(JSON.stringify({ type: 'room-status', data: roomStatuses }));
             sendNotesState(conn);
         });
@@ -252,6 +254,7 @@ function App() {
                 if (msg.type === 'examEnd') setExamEnd(new Date(msg.data));
                 if (msg.type === 'examWarningMinutes') setExamWarningMinutes(Number(msg.data));
                 if (msg.type === 'tiles') setTiles(msg.data);
+                if (msg.type === 'toilet-blocked') setToiletBlocked(Boolean(msg.data));
                 if (msg.type === 'chat') {
                     setMessages((prev) => [...prev, msg.data]);
                     addProtocolEntry('Chat', `von ${msg.data.user}: ${msg.data.text}`);
@@ -413,6 +416,11 @@ function App() {
                     <ToiletTile
                         title="Toilette"
                         occupants={toiletOccupants}
+                        isBlocked={toiletBlocked}
+                        onToggleBlocked={(next) => {
+                            setToiletBlocked(next);
+                            broadcast('toilet-blocked', next);
+                        }}
                         onOccupy={(name) => {
                             setToiletOccupants((prev) => [...prev, name]);
                             addProtocolEntry('Toilette', `besetzt (${name})`);
