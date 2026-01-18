@@ -44,8 +44,16 @@ export function TileWrapper({
             <Group justify="space-between" mb="xs">
                 <Text fw={500}>{title}</Text>
                 <Group gap="xs">
-                    <ActionIcon onClick={() => changeSpan(-1)} variant="light"><IconMinus size={16} /></ActionIcon>
-                    <ActionIcon onClick={() => changeSpan(1)} variant="light"><IconPlus size={16} /></ActionIcon>
+                    {!isMobile && (
+                        <>
+                            <ActionIcon onClick={() => changeSpan(-1)} variant="light">
+                                <IconMinus size={16} />
+                            </ActionIcon>
+                            <ActionIcon onClick={() => changeSpan(1)} variant="light">
+                                <IconPlus size={16} />
+                            </ActionIcon>
+                        </>
+                    )}
                     {headerActions}
                     {onClose && (
                         <ActionIcon
