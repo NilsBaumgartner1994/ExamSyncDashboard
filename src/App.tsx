@@ -1,5 +1,5 @@
 // src/App.tsx
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Peer from 'peerjs';
 import {
     AppShell,
@@ -65,6 +65,8 @@ function App() {
     const createRoomTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const recentHostsLimit = 5;
     const [showDebugProtocol, setShowDebugProtocol] = useState(false);
+    const [lastHostsLoaded, setLastHostsLoaded] = useState(false);
+    const [lastHostsLogged, setLastHostsLogged] = useState(false);
 
     const tileDefinitions = [
         { key: 'link', label: 'Mein Raum-Link' },
@@ -111,7 +113,7 @@ function App() {
         }
     };
 
-    const addProtocolEntry = (card: string, message: string) => {
+    const addProtocolEntry = useCallback((card: string, message: string) => {
         const now = new Date();
         const date = now.toLocaleDateString('de-DE');
         const time = now.toLocaleTimeString('de-DE', {
@@ -119,7 +121,7 @@ function App() {
             minute: '2-digit',
         });
         setProtocolEntries((prev) => [...prev, `${date} - ${time} [${card}]: ${message}`]);
-    };
+    }, []);
 
     const exportProtocol = () => {
         const content = protocolEntries.length > 0 ? protocolEntries.join('\n') : 'Keine Einträge vorhanden.';
@@ -393,28 +395,49 @@ function App() {
 
     useEffect(() => {
         const storedList = localStorage.getItem('lastConnectedHosts');
+        const normalizeList = (list: Array<string | null | undefined>) =>
+            Array.from(
+                new Set(list.map((item) => normalizeRoomCode(String(item ?? ''))).filter(Boolean)),
+            );
+        let normalized: string[] = [];
+
         if (storedList) {
             try {
                 const parsed = JSON.parse(storedList);
                 if (Array.isArray(parsed)) {
-                    const normalized = parsed
-                        .map((item) => normalizeRoomCode(String(item)))
-                        .filter(Boolean);
-                    setLastConnectedHosts(normalized);
-                    setLastConnectedHost(normalized[0] ?? null);
-                    return;
+                    normalized = normalizeList(parsed.map((item) => String(item)));
                 }
             } catch (error) {
                 // ignore invalid storage
             }
         }
-        const stored = localStorage.getItem('lastConnectedHost');
-        if (stored) {
-            const normalized = normalizeRoomCode(stored);
-            setLastConnectedHost(normalized);
-            setLastConnectedHosts([normalized]);
+
+        if (normalized.length === 0) {
+            const stored = localStorage.getItem('lastConnectedHost');
+            if (stored) {
+                normalized = normalizeList([stored]);
+            }
         }
+
+        if (normalized.length > 0) {
+            setLastConnectedHosts(normalized);
+            setLastConnectedHost(normalized[0] ?? null);
+        }
+        setLastHostsLoaded(true);
     }, []);
+
+    useEffect(() => {
+        if (!joined || !lastHostsLoaded || lastHostsLogged) return;
+        setLastHostsLogged(true);
+        if (lastConnectedHosts.length > 0) {
+            addProtocolEntry(
+                'Login',
+                `Zuletzt beigetretene Räume (lokaler Speicher): ${lastConnectedHosts.join(', ')}`,
+            );
+            return;
+        }
+        addProtocolEntry('Login', 'Keine zuletzt beigetretenen Räume im lokalen Speicher gefunden.');
+    }, [addProtocolEntry, joined, lastConnectedHosts, lastHostsLoaded, lastHostsLogged]);
 
     useEffect(() => {
         if (
