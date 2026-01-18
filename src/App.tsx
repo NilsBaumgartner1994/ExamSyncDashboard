@@ -56,11 +56,14 @@ function App() {
     const [createRoomDebug, setCreateRoomDebug] = useState('Debug: bereit.');
     const [createRoomError, setCreateRoomError] = useState('');
     const [lastConnectedHost, setLastConnectedHost] = useState<string | null>(null);
+    const [lastConnectedHosts, setLastConnectedHosts] = useState<string[]>([]);
     const [lastHostStatus, setLastHostStatus] = useState<'idle' | 'checking' | 'reachable' | 'unreachable'>(
         'idle',
     );
     const [autoJoinAttempted, setAutoJoinAttempted] = useState(false);
     const initialRoomParamRef = useRef<string | null>(null);
+    const createRoomTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const recentHostsLimit = 5;
 
     const tileDefinitions = [
         { key: 'link', label: 'Mein Raum-Link' },
@@ -129,8 +132,24 @@ function App() {
     };
 
     const rememberLastHost = (peerId: string) => {
-        setLastConnectedHost(peerId);
-        localStorage.setItem('lastConnectedHost', peerId);
+        const normalized = normalizeRoomCode(peerId);
+        setLastConnectedHosts((prev) => {
+            const next = [normalized, ...prev.filter((id) => id !== normalized)].slice(0, recentHostsLimit);
+            localStorage.setItem('lastConnectedHosts', JSON.stringify(next));
+            const [mostRecent] = next;
+            if (mostRecent) {
+                localStorage.setItem('lastConnectedHost', mostRecent);
+            }
+            setLastConnectedHost(mostRecent ?? null);
+            return next;
+        });
+    };
+
+    const clearCreateRoomTimeout = () => {
+        if (createRoomTimeoutRef.current) {
+            clearTimeout(createRoomTimeoutRef.current);
+            createRoomTimeoutRef.current = null;
+        }
     };
 
     const connectToPeer = (peerId: string) => {
@@ -270,8 +289,9 @@ function App() {
             alert('Ungültige Raum-ID. Bitte nur Ziffern verwenden.');
             return;
         }
+        clearCreateRoomTimeout();
         if (!connectToId) {
-            setCreateRoomDebug('Debug: Raum-Erstellung gestartet.');
+            setCreateRoomDebug('Debug: Raum-Erstellung gestartet. Warte auf Peer-ID...');
             setCreateRoomError('');
             setIsHost(true);
             setHostPeerId(null);
@@ -297,12 +317,21 @@ function App() {
                 peer.destroy();
                 peerRef.current = null;
             }, 10000);
+        } else {
+            createRoomTimeoutRef.current = setTimeout(() => {
+                setCreateRoomDebug('Debug: Raum-Erstellung dauert zu lange.');
+                setCreateRoomError('Timeout beim Erstellen des Raums.');
+                peer.disconnect();
+                peer.destroy();
+                peerRef.current = null;
+            }, 10000);
         }
 
         peer.on('open', (id) => {
             setRoomId(id);
             if (!connectToId) {
                 setJoined(true);
+                clearCreateRoomTimeout();
                 setCreateRoomDebug(
                     `Debug: Raum erstellt (ID ${formatRoomIdForDisplay(id)}).`,
                 );
@@ -318,6 +347,7 @@ function App() {
                     (err as { message?: string; type?: string }).message ??
                     (err as { message?: string; type?: string }).type ??
                     'Unbekannter Fehler';
+                clearCreateRoomTimeout();
                 setCreateRoomDebug('Debug: Raum-Erstellung fehlgeschlagen.');
                 setCreateRoomError(errorMessage);
             }
@@ -346,9 +376,27 @@ function App() {
     }, []);
 
     useEffect(() => {
+        const storedList = localStorage.getItem('lastConnectedHosts');
+        if (storedList) {
+            try {
+                const parsed = JSON.parse(storedList);
+                if (Array.isArray(parsed)) {
+                    const normalized = parsed
+                        .map((item) => normalizeRoomCode(String(item)))
+                        .filter(Boolean);
+                    setLastConnectedHosts(normalized);
+                    setLastConnectedHost(normalized[0] ?? null);
+                    return;
+                }
+            } catch (error) {
+                // ignore invalid storage
+            }
+        }
         const stored = localStorage.getItem('lastConnectedHost');
         if (stored) {
-            setLastConnectedHost(normalizeRoomCode(stored));
+            const normalized = normalizeRoomCode(stored);
+            setLastConnectedHost(normalized);
+            setLastConnectedHosts([normalized]);
         }
     }, []);
 
@@ -660,28 +708,38 @@ function App() {
                             QR-Code scannen
                         </Button>
                     </Group>
-                    {lastConnectedHost && (
+                    {lastConnectedHosts.length > 0 && (
                         <>
-                            <Divider my="sm" label="Zuletzt verbunden mit" labelPosition="center" />
-                            <Button variant="outline" onClick={() => handleJoin(lastConnectedHost)}>
-                                {`Zuletzt verbunden mit ${formatRoomIdForDisplay(lastConnectedHost)}`}
-                            </Button>
-                            <Text
-                                size="sm"
-                                c={
-                                    lastHostStatus === 'reachable'
-                                        ? 'green'
-                                        : lastHostStatus === 'unreachable'
-                                          ? 'red'
-                                          : 'dimmed'
-                                }
-                            >
-                                {lastHostStatus === 'checking'
-                                    ? 'Erreichbarkeit wird geprüft...'
-                                    : lastHostStatus === 'reachable'
-                                      ? 'Erreichbar'
-                                      : 'Antwortet nicht'}
-                            </Text>
+                            <Divider my="sm" label="Zuletzt beigetretene Räume" labelPosition="center" />
+                            <Group gap="xs" wrap="wrap">
+                                {lastConnectedHosts.map((hostId) => (
+                                    <Button
+                                        key={hostId}
+                                        variant={hostId === lastConnectedHost ? 'outline' : 'light'}
+                                        onClick={() => handleJoin(hostId)}
+                                    >
+                                        {formatRoomIdForDisplay(hostId)}
+                                    </Button>
+                                ))}
+                            </Group>
+                            {lastConnectedHost && (
+                                <Text
+                                    size="sm"
+                                    c={
+                                        lastHostStatus === 'reachable'
+                                            ? 'green'
+                                            : lastHostStatus === 'unreachable'
+                                              ? 'red'
+                                              : 'dimmed'
+                                    }
+                                >
+                                    {lastHostStatus === 'checking'
+                                        ? 'Erreichbarkeit des letzten Raums wird geprüft...'
+                                        : lastHostStatus === 'reachable'
+                                          ? 'Letzter Raum erreichbar'
+                                          : 'Letzter Raum antwortet nicht'}
+                                </Text>
+                            )}
                         </>
                     )}
 
