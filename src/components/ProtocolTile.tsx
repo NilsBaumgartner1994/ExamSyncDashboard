@@ -1,25 +1,29 @@
 // src/components/ProtocolTile.tsx
 import React from 'react';
-import { Button, ScrollArea, Stack, Text } from '@mantine/core';
+import { Button, Checkbox, ScrollArea, Stack, Text } from '@mantine/core';
 import { TileWrapper } from './TileWrapper';
 
 interface ProtocolTileProps {
     title: string;
     entries: string[];
     onExport: () => void;
+    showDebug: boolean;
+    onToggleDebug: (next: boolean) => void;
     defaultSpan?: number;
     onSpanChange?: (span: number) => void;
     onClose?: () => void;
 }
 
 export function ProtocolTile({
-                                 title,
-                                 entries,
-                                 onExport,
-                                 defaultSpan = 3,
-                                 onSpanChange,
-                                 onClose,
-                             }: ProtocolTileProps) {
+    title,
+    entries,
+    onExport,
+    showDebug,
+    onToggleDebug,
+    defaultSpan = 3,
+    onSpanChange,
+    onClose,
+}: ProtocolTileProps) {
     return (
         <TileWrapper
             title={title}
@@ -28,6 +32,11 @@ export function ProtocolTile({
             onClose={onClose}
         >
             <Stack>
+                <Checkbox
+                    label="Debug-Protokoll anzeigen"
+                    checked={showDebug}
+                    onChange={(event) => onToggleDebug(event.currentTarget.checked)}
+                />
                 <ScrollArea h={150}>
                     {entries.length > 0 ? (
                         entries.map((entry, index) => (

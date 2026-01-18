@@ -63,8 +63,8 @@ function App() {
     const [autoJoinAttempted, setAutoJoinAttempted] = useState(false);
     const initialRoomParamRef = useRef<string | null>(null);
     const createRoomTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    const pendingHostMessages = useRef<string[]>([]);
     const recentHostsLimit = 5;
+    const [showDebugProtocol, setShowDebugProtocol] = useState(false);
 
     const tileDefinitions = [
         { key: 'link', label: 'Mein Raum-Link' },
@@ -93,11 +93,21 @@ function App() {
         const conn = connections.current[hostPeerId];
         if (conn?.open) {
             conn.send(payload);
+            addProtocolEntry('Debug', `Sende Host-Anfrage: ${type}`);
             return;
         }
-        pendingHostMessages.current.push(payload);
-        if (!conn) {
-            connectToPeer(hostPeerId);
+        addProtocolEntry('Debug', `Host-Verbindung nicht bereit für ${type}.`);
+        if (conn && !conn.open) {
+            delete connections.current[hostPeerId];
+        }
+        if (peerRef.current) {
+            const reconnect = peerRef.current.connect(hostPeerId);
+            connections.current[hostPeerId] = reconnect;
+            setupConnection(reconnect);
+            reconnect.once('open', () => {
+                reconnect.send(payload);
+                addProtocolEntry('Debug', `Sende Host-Anfrage nach Verbindungsaufbau: ${type}`);
+            });
         }
     };
 
@@ -182,6 +192,7 @@ function App() {
     const broadcastRoomStatuses = (nextStatuses: RoomStatus[]) => {
         if (!isHost) return;
         broadcast('room-status', nextStatuses);
+        addProtocolEntry('Debug', `Status gesendet: room-status (${nextStatuses.length})`);
     };
 
     const applyRoomAdd = (name: string) => {
@@ -512,12 +523,6 @@ function App() {
                 conn.send(JSON.stringify({ type: 'room-status', data: roomStatuses }));
                 sendNotesState(conn);
             } else if (hostPeerId && conn.peer === hostPeerId) {
-                if (pendingHostMessages.current.length > 0) {
-                    pendingHostMessages.current.forEach((message) => {
-                        conn.send(message);
-                    });
-                    pendingHostMessages.current = [];
-                }
                 conn.send(JSON.stringify({ type: 'room-status-request' }));
             }
         });
@@ -576,6 +581,7 @@ function App() {
                     const next = Boolean(msg.data);
                     setToiletBlocked(next);
                     broadcast('toilet-blocked', next);
+                    addProtocolEntry('Debug', `Status gesendet: toilet-blocked (${next ? 'gesperrt' : 'frei'})`);
                 }
                 if (msg.type === 'toilet-occupy-request' && isHost) {
                     const name = String(msg.data ?? '');
@@ -584,6 +590,7 @@ function App() {
                         if (prev.includes(name)) return prev;
                         const next = [...prev, name];
                         broadcast('toilet-occupants', next);
+                        addProtocolEntry('Debug', `Status gesendet: toilet-occupants (+${name})`);
                         return next;
                     });
                     addProtocolEntry('Toilette', `besetzt (${name})`);
@@ -597,6 +604,7 @@ function App() {
                         const next = [...prev];
                         next.splice(index, 1);
                         broadcast('toilet-occupants', next);
+                        addProtocolEntry('Debug', `Status gesendet: toilet-occupants (-${name})`);
                         return next;
                     });
                     addProtocolEntry('Toilette', `frei (${name} zurück)`);
@@ -809,6 +817,9 @@ function App() {
     };
 
     const hiddenTileList = tileDefinitions.filter((tile) => hiddenTiles[tile.key]);
+    const visibleProtocolEntries = showDebugProtocol
+        ? protocolEntries
+        : protocolEntries.filter((entry) => !entry.includes('[Debug]'));
 
     return (
         <AppShell padding={{ base: 'md', sm: 'lg' }}>
@@ -829,6 +840,10 @@ function App() {
                             if (isHost) {
                                 setToiletBlocked(next);
                                 broadcast('toilet-blocked', next);
+                                addProtocolEntry(
+                                    'Debug',
+                                    `Status gesendet: toilet-blocked (${next ? 'gesperrt' : 'frei'})`,
+                                );
                             } else {
                                 sendToHost('toilet-blocked-request', next);
                             }
@@ -838,6 +853,7 @@ function App() {
                                 setToiletOccupants((prev) => {
                                     const next = [...prev, name];
                                     broadcast('toilet-occupants', next);
+                                    addProtocolEntry('Debug', `Status gesendet: toilet-occupants (+${name})`);
                                     return next;
                                 });
                                 addProtocolEntry('Toilette', `besetzt (${name})`);
@@ -853,6 +869,7 @@ function App() {
                                     const next = [...prev];
                                     next.splice(index, 1);
                                     broadcast('toilet-occupants', next);
+                                    addProtocolEntry('Debug', `Status gesendet: toilet-occupants (-${name})`);
                                     return next;
                                 });
                                 addProtocolEntry('Toilette', `frei (${name} zurück)`);
@@ -964,8 +981,10 @@ function App() {
                 {!hiddenTiles.protocol && (
                     <ProtocolTile
                         title="Protokoll"
-                        entries={protocolEntries}
+                        entries={visibleProtocolEntries}
                         onExport={exportProtocol}
+                        showDebug={showDebugProtocol}
+                        onToggleDebug={setShowDebugProtocol}
                         onClose={() => hideTile('protocol')}
                     />
                 )}
