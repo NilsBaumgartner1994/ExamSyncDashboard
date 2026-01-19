@@ -30,7 +30,13 @@ import { ToiletTile } from './components/ToiletTile';
 import { RoomStatus, RoomStatusTile } from './components/RoomStatusTile';
 import { NotesTile } from './components/NotesTile';
 import { TileWrapper } from './components/TileWrapper';
-import { formatRoomIdForDisplay, isValidRoomCode, normalizeRoomCode } from './utils/roomCode';
+import {
+    formatRoomIdForDisplay,
+    isValidRoomCode,
+    normalizeRoomCode,
+    ROOM_ID_MAX_LENGTH,
+    ROOM_ID_MIN_LENGTH,
+} from './utils/roomCode';
 
 type StoredState = {
     version: number;
@@ -722,16 +728,40 @@ function App() {
     );
 
     const generateRoomId = () => {
-        const bytes = new Uint32Array(1);
+        const alphabet = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        const length = 20;
+        const bytes = new Uint8Array(length);
         crypto.getRandomValues(bytes);
-        return String(bytes[0] % 1_000_000).padStart(6, '0');
+        return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join('');
     };
+
+    const ensureRoomExists = useCallback(
+        async (targetRoomId: string) => {
+            const existing = await fetchKvStateForJoin(targetRoomId);
+            if (existing.state) {
+                return { ok: true, created: false };
+            }
+            if (existing.status !== 404) {
+                return { ok: false, created: false, message: existing.message || 'Raum konnte nicht geladen werden.' };
+            }
+            const initialState = { ...initialStoredState };
+            applyStoredState(initialState);
+            const saved = await saveKvState(initialState, 0);
+            if (!saved.ok) {
+                return { ok: false, created: false, message: saved.message };
+            }
+            return { ok: true, created: true };
+        },
+        [applyStoredState, fetchKvStateForJoin, saveKvState],
+    );
 
     const createRoomWithId = useCallback(
         async (requestedRoomId: string) => {
             const normalizedCode = normalizeRoomCode(requestedRoomId);
             if (!isValidRoomCode(normalizedCode)) {
-                setJoinError('Bitte eine 6-stellige Raum-ID eingeben.');
+                setJoinError(
+                    `Bitte eine Raum-ID mit ${ROOM_ID_MIN_LENGTH}-${ROOM_ID_MAX_LENGTH} Zeichen eingeben (a-z, A-Z, 0-9).`,
+                );
                 setJoinCanCreate(false);
                 return;
             }
@@ -742,21 +772,21 @@ function App() {
             setKvSyncStatus('');
             setRoomId(normalizedCode);
             setKvKey(normalizedCode);
-            const initialState = { ...initialStoredState };
-            applyStoredState(initialState);
-            const result = await saveKvState(initialState, 0);
-            if (!result.ok) {
-                setJoinError(result.message);
+            const ensureResult = await ensureRoomExists(normalizedCode);
+            if (!ensureResult.ok) {
+                setJoinError(ensureResult.message ?? 'Raum konnte nicht erstellt werden.');
                 setJoining(false);
                 return;
             }
-            setCreateRoomDebug(`Debug: Raum erstellt (ID ${formatRoomIdForDisplay(normalizedCode)}).`);
+            setCreateRoomDebug(
+                `Debug: Raum ${ensureResult.created ? 'erstellt' : 'geladen'} (ID ${formatRoomIdForDisplay(normalizedCode)}).`,
+            );
             setJoined(true);
             setJoining(false);
             rememberLastRoom(normalizedCode);
             window.history.replaceState({}, document.title, window.location.pathname);
         },
-        [applyStoredState, rememberLastRoom, saveKvState],
+        [ensureRoomExists, rememberLastRoom],
     );
 
     const handleJoin = useCallback(
@@ -766,7 +796,9 @@ function App() {
                 setRoomIdInput(normalizedCode);
             }
             if (connectToCode && !isValidRoomCode(normalizedCode)) {
-                setJoinError('Bitte eine 6-stellige Raum-ID eingeben.');
+                setJoinError(
+                    `Bitte eine Raum-ID mit ${ROOM_ID_MIN_LENGTH}-${ROOM_ID_MAX_LENGTH} Zeichen eingeben (a-z, A-Z, 0-9).`,
+                );
                 setJoinCanCreate(false);
                 return;
             }
@@ -778,33 +810,21 @@ function App() {
             const nextRoomId = normalizedCode || generateRoomId();
             setRoomId(nextRoomId);
             setKvKey(nextRoomId);
-            if (!normalizedCode) {
-                const initialState = { ...initialStoredState };
-                applyStoredState(initialState);
-                const result = await saveKvState(initialState, 0);
-                if (!result.ok) {
-                    setJoinError(result.message);
-                    setJoining(false);
-                    return;
-                }
-                setCreateRoomDebug(`Debug: Raum erstellt (ID ${formatRoomIdForDisplay(nextRoomId)}).`);
-            } else {
-                const result = await fetchKvStateForJoin(nextRoomId);
-                if (!result.state) {
-                    const notFound = result.status === 404;
-                    setJoinError(notFound ? 'Raum existiert noch nicht.' : result.message);
-                    setJoinCanCreate(notFound);
-                    setJoining(false);
-                    return;
-                }
-                setCreateRoomDebug(`Debug: Raum geladen (ID ${formatRoomIdForDisplay(nextRoomId)}).`);
+            const ensureResult = await ensureRoomExists(nextRoomId);
+            if (!ensureResult.ok) {
+                setJoinError(ensureResult.message ?? 'Raum konnte nicht geladen werden.');
+                setJoining(false);
+                return;
             }
+            setCreateRoomDebug(
+                `Debug: Raum ${ensureResult.created ? 'erstellt' : 'geladen'} (ID ${formatRoomIdForDisplay(nextRoomId)}).`,
+            );
             setJoined(true);
             setJoining(false);
             rememberLastRoom(nextRoomId);
             window.history.replaceState({}, document.title, window.location.pathname);
         },
-        [applyStoredState, fetchKvStateForJoin, rememberLastRoom, saveKvState],
+        [ensureRoomExists, rememberLastRoom],
     );
 
     useEffect(() => {
@@ -1245,7 +1265,7 @@ function App() {
                         <SimpleGrid cols={{ base: 1, sm: 2 }}>
                             <TextInput
                                 label="Key"
-                                placeholder="z. B. 123456"
+                                placeholder="z. B. ExamRoom123"
                                 value={kvKey}
                                 onChange={(event) => setKvKey(normalizeKvKey(event.currentTarget.value))}
                             />
@@ -1323,7 +1343,7 @@ function App() {
                     <Divider my="sm" label="Raum beitreten" labelPosition="center" />
 
                     <TextInput
-                        placeholder="6-stellige Raum-ID eingeben"
+                        placeholder="Raum-ID eingeben (a-z, A-Z, 0-9)"
                         value={roomIdInput}
                         onChange={(e) => {
                             setRoomIdInput(normalizeRoomCode(e.currentTarget.value));
@@ -1331,8 +1351,7 @@ function App() {
                                 setJoinCanCreate(false);
                             }
                         }}
-                        inputMode="numeric"
-                        maxLength={6}
+                        maxLength={ROOM_ID_MAX_LENGTH}
                     />
                     <Group grow>
                         <Button onClick={() => handleJoin(roomIdInput)}>Beitreten</Button>
