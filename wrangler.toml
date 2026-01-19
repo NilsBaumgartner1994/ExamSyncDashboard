@@ -1,3 +1,7 @@
 name = "exam-sync-dashboard"
 main = "worker/index.ts"
 compatibility_date = "2024-05-01"
+
+kv_namespaces = [
+  { binding = "EXAM_SYNC_KV" }
+]
