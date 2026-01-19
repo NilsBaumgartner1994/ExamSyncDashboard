@@ -87,6 +87,8 @@ function App() {
     const [p2pRole, setP2pRole] = useState<'host' | 'client' | null>(null);
     const p2pPeerRef = useRef<SimplePeer.Instance | null>(null);
     const p2pCopyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const p2pReconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const p2pKeepAliveRef = useRef<NodeJS.Timeout | null>(null);
 
     const tileDefinitions = [
         { key: 'link', label: 'Mein Raum-Link' },
@@ -213,6 +215,14 @@ function App() {
             clearTimeout(p2pCopyTimeoutRef.current);
             p2pCopyTimeoutRef.current = null;
         }
+        if (p2pReconnectTimeoutRef.current) {
+            clearTimeout(p2pReconnectTimeoutRef.current);
+            p2pReconnectTimeoutRef.current = null;
+        }
+        if (p2pKeepAliveRef.current) {
+            clearInterval(p2pKeepAliveRef.current);
+            p2pKeepAliveRef.current = null;
+        }
     };
 
     const encodeP2pSignal = (rawSignal: string) => {
@@ -240,6 +250,39 @@ function App() {
         setP2pRole(role);
     };
 
+    const stopP2pKeepAlive = () => {
+        if (p2pKeepAliveRef.current) {
+            clearInterval(p2pKeepAliveRef.current);
+            p2pKeepAliveRef.current = null;
+        }
+    };
+
+    const scheduleExperimentalReconnect = (reason: string) => {
+        if (!p2pRole) return;
+        if (p2pReconnectTimeoutRef.current) return;
+        stopP2pKeepAlive();
+        p2pPeerRef.current?.destroy();
+        p2pPeerRef.current = null;
+        setP2pConnected(false);
+        setP2pLocalSignal('');
+        setP2pRemoteSignal('');
+        setP2pQrCode('');
+        setP2pError('');
+        setP2pStatus(`Verbindung verloren (${reason}). Neuer Handshake wird vorbereitet…`);
+        setP2pChatMessages((prev) => [
+            ...prev,
+            {
+                id: `${Date.now()}-reconnect`,
+                user: 'Debug',
+                text: `Verbindung verloren (${reason}). Bitte Signal neu austauschen.`,
+            },
+        ]);
+        p2pReconnectTimeoutRef.current = setTimeout(() => {
+            p2pReconnectTimeoutRef.current = null;
+            ensureExperimentalPeer(p2pRole === 'host');
+        }, 1000);
+    };
+
     const ensureExperimentalPeer = (initiator: boolean) => {
         if (p2pPeerRef.current) {
             return;
@@ -261,6 +304,18 @@ function App() {
         peer.on('connect', () => {
             setP2pStatus('Peer-to-Peer verbunden.');
             setP2pConnected(true);
+            stopP2pKeepAlive();
+            p2pKeepAliveRef.current = setInterval(() => {
+                if (!p2pPeerRef.current || !p2pPeerRef.current.connected) {
+                    return;
+                }
+                try {
+                    p2pPeerRef.current.send(JSON.stringify({ type: 'ping', ts: Date.now() }));
+                } catch (error) {
+                    const message = error instanceof Error ? error.message : 'Unbekannter Fehler';
+                    setP2pError(`Keep-Alive fehlgeschlagen: ${message}`);
+                }
+            }, 15000);
             setP2pChatMessages((prev) => [
                 ...prev,
                 {
@@ -273,13 +328,18 @@ function App() {
         peer.on('close', () => {
             setP2pStatus('Verbindung geschlossen.');
             setP2pConnected(false);
+            scheduleExperimentalReconnect('Datenkanal geschlossen');
         });
         peer.on('error', (error) => {
             setP2pError(`Peer-Fehler: ${error.message}`);
+            scheduleExperimentalReconnect('Peer-Fehler');
         });
         peer.on('data', (data) => {
             try {
                 const payload = JSON.parse(String(data));
+                if (payload?.type === 'ping') {
+                    return;
+                }
                 if (payload?.type === 'chat') {
                     setP2pChatMessages((prev) => [
                         ...prev,
@@ -319,6 +379,18 @@ function App() {
             setP2pError(`Signal konnte nicht gelesen werden: ${message}`);
         }
     };
+
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible' && p2pRole && !p2pConnected) {
+                scheduleExperimentalReconnect('App wieder aktiv');
+            }
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+    }, [p2pConnected, p2pRole]);
 
     useEffect(() => {
         if (!p2pLocalSignal) {
