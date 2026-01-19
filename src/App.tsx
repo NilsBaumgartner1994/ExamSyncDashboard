@@ -177,6 +177,11 @@ function App() {
     };
 
     const normalizeWorkerUrl = (url: string) => url.replace(/\/+$/, '');
+    const resolveWorkerUrl = useCallback(() => {
+        const trimmed = kvWorkerUrl.trim();
+        if (trimmed) return trimmed;
+        return defaultKvWorkerUrl.trim();
+    }, [defaultKvWorkerUrl, kvWorkerUrl]);
 
     const resetKvState = () => {
         setKvKey('');
@@ -250,7 +255,7 @@ function App() {
     };
 
     const performKvRequest = async (method: 'GET' | 'PUT' | 'DELETE', key?: string, value?: string) => {
-        const trimmedUrl = kvWorkerUrl.trim();
+        const trimmedUrl = resolveWorkerUrl();
         if (!trimmedUrl) {
             setKvStatus('Fehler');
             setKvResponse('Bitte Worker-URL angeben.');
@@ -565,7 +570,7 @@ function App() {
 
     const saveKvState = useCallback(
         async (nextState: StoredState, expectedVersion?: number) => {
-            const trimmedUrl = kvWorkerUrl.trim();
+            const trimmedUrl = resolveWorkerUrl();
             if (!trimmedUrl || !roomId) {
                 return { ok: false, status: 0, message: 'KV Worker URL oder Raum-ID fehlt.' };
             }
@@ -584,12 +589,12 @@ function App() {
             }
             return { ok: true, status: response.status };
         },
-        [kvWorkerUrl, roomId],
+        [resolveWorkerUrl, roomId],
     );
 
     const fetchKvState = useCallback(
         async (targetRoomId?: string, options?: { silent?: boolean; force?: boolean }) => {
-            const trimmedUrl = kvWorkerUrl.trim();
+            const trimmedUrl = resolveWorkerUrl();
             const roomKey = targetRoomId ?? roomId;
             if (!trimmedUrl || !roomKey) {
                 return null;
@@ -637,7 +642,7 @@ function App() {
                 return null;
             }
         },
-        [applyStoredState, kvWorkerUrl, roomId],
+        [applyStoredState, resolveWorkerUrl, roomId],
     );
 
     const updateSharedState = useCallback(
@@ -663,9 +668,12 @@ function App() {
     );
 
     const generateRoomId = () => {
-        const bytes = new Uint32Array(1);
+        if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+            return crypto.randomUUID().replace(/-/g, '');
+        }
+        const bytes = new Uint8Array(12);
         crypto.getRandomValues(bytes);
-        return String(bytes[0] % 100000000).padStart(8, '0');
+        return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
     };
 
     const handleJoin = useCallback(
