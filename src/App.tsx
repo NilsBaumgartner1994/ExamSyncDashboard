@@ -498,7 +498,6 @@ function App() {
         } else {
             setIsHost(false);
             setHostPeerId(connectToId);
-            rememberLastHost(connectToId);
         }
         const myPeerId = `${Date.now()}`;
         const peer = new Peer(myPeerId);
@@ -702,6 +701,9 @@ function App() {
             if (isHost) {
                 addProtocolEntry('Verbindung', `Teilnehmer ${conn.peer} beigetreten`);
             }
+            if (!isHost && hostPeerId && conn.peer === hostPeerId) {
+                rememberLastHost(hostPeerId);
+            }
             if (isHost) {
                 broadcast('examEnd', examEnd);
                 broadcast('examWarningMinutes', examWarningMinutes);
@@ -840,9 +842,6 @@ function App() {
                     clearTimeout(connectionTimeoutRef.current!);
                     setConnecting(false);
                     setJoined(true);
-                    if (!isHost && hostPeerId) {
-                        rememberLastHost(hostPeerId);
-                    }
                     window.history.replaceState({}, document.title, window.location.pathname);
                 }
             } catch (e) {
@@ -1180,7 +1179,7 @@ function App() {
                             QR-Code scannen
                         </Button>
                     </Group>
-                    <Divider my="sm" label="Zuletzt verbindungsaufbu" labelPosition="center" />
+                    <Divider my="sm" label="Zuletzt verbunden mit" labelPosition="center" />
                     {lastConnectedHost ? (
                         <Stack gap="xs">
                             <Button variant="outline" onClick={() => handleJoin(lastConnectedHost)}>
@@ -1207,6 +1206,22 @@ function App() {
                         <Text size="sm" c="dimmed">
                             Kein zuletzt verbundener Raum gespeichert.
                         </Text>
+                    )}
+                    {lastConnectedHosts.length > 0 && (
+                        <>
+                            <Divider my="sm" label="Zuletzt beigetretene Räume" labelPosition="center" />
+                            <Group gap="xs" wrap="wrap">
+                                {lastConnectedHosts.map((hostId) => (
+                                    <Button
+                                        key={hostId}
+                                        variant={hostId === lastConnectedHost ? 'outline' : 'light'}
+                                        onClick={() => handleJoin(hostId)}
+                                    >
+                                        {formatRoomIdForDisplay(hostId)}
+                                    </Button>
+                                ))}
+                            </Group>
+                        </>
                     )}
                     <Divider my="sm" label="Oder neuen Link erstellen" labelPosition="center" />
                     <Button onClick={() => handleJoin()}>Eigenen Link erstellen</Button>
