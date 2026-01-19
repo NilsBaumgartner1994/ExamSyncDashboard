@@ -105,7 +105,7 @@ export function TimerTile({
                 <Center>
                     <Stack align="center" gap="xs">
                         <Text size="sm" c="dimmed">Restzeit</Text>
-                        <Text size="xl" fw={600}>{remaining}</Text>
+                        <Text size="xl" fw={600} style={{ fontSize: '2em' }}>{remaining}</Text>
                     </Stack>
                 </Center>
             ) : (
