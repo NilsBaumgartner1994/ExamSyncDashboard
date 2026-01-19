@@ -648,10 +648,10 @@ function App() {
                     }
                     return null;
                 }
+                setLastSyncAt(new Date());
                 const currentVersion = storedStateRef.current.version;
                 if (options?.force || next.version > currentVersion) {
                     applyStoredState(next);
-                    setLastSyncAt(new Date());
                 }
                 setKvSyncError('');
                 if (!options?.silent) {
