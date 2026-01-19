@@ -66,7 +66,8 @@ const initialStoredState: StoredState = {
     notesLockedByName: null,
 };
 
-const pollIntervalMs = 5000;
+const defaultPollIntervalSeconds = 5;
+const pollIntervalStorageKey = 'kvPollIntervalSeconds';
 
 function App() {
     const [nickname, setNickname] = useState('Anonym');
@@ -98,6 +99,13 @@ function App() {
     const [kvSyncStatus, setKvSyncStatus] = useState('');
     const [kvSyncError, setKvSyncError] = useState('');
     const [lastSyncAt, setLastSyncAt] = useState<Date | null>(null);
+    const [pollIntervalSeconds, setPollIntervalSeconds] = useState(() => {
+        if (typeof localStorage === 'undefined') return defaultPollIntervalSeconds;
+        const stored = Number(localStorage.getItem(pollIntervalStorageKey));
+        return Number.isFinite(stored) && stored > 0 ? stored : defaultPollIntervalSeconds;
+    });
+    const [nextPollAt, setNextPollAt] = useState<Date | null>(null);
+    const [nextPollInSeconds, setNextPollInSeconds] = useState<number | null>(null);
     const [showDebugProtocol, setShowDebugProtocol] = useState(false);
     const defaultKvWorkerUrl = (() => {
         const envUrl = (import.meta.env.VITE_KV_WORKER_URL as string | undefined)?.trim();
@@ -204,6 +212,15 @@ function App() {
         setKvStatus('');
         setKvResponse('');
     };
+
+    const handlePollIntervalChange = useCallback((value: number) => {
+        const rounded = Math.round(value);
+        if (!Number.isFinite(rounded) || rounded <= 0) return;
+        setPollIntervalSeconds(rounded);
+        if (typeof localStorage !== 'undefined') {
+            localStorage.setItem(pollIntervalStorageKey, String(rounded));
+        }
+    }, []);
 
     const buildStoredState = useCallback(
         () => ({
@@ -877,12 +894,35 @@ function App() {
     }, [scanOpened]);
 
     useEffect(() => {
-        if (!joined || !roomId) return;
+        if (!joined || !roomId) {
+            setNextPollAt(null);
+            return;
+        }
+        const intervalMs = pollIntervalSeconds * 1000;
+        const scheduleNextPoll = () => {
+            setNextPollAt(new Date(Date.now() + intervalMs));
+        };
+        scheduleNextPoll();
         const intervalId = setInterval(() => {
             fetchKvState(roomId, { silent: true });
-        }, pollIntervalMs);
+            scheduleNextPoll();
+        }, intervalMs);
         return () => clearInterval(intervalId);
-    }, [fetchKvState, joined, roomId]);
+    }, [fetchKvState, joined, pollIntervalSeconds, roomId]);
+
+    useEffect(() => {
+        if (!nextPollAt) {
+            setNextPollInSeconds(null);
+            return;
+        }
+        const updateCountdown = () => {
+            const diffMs = nextPollAt.getTime() - Date.now();
+            setNextPollInSeconds(Math.max(0, Math.ceil(diffMs / 1000)));
+        };
+        updateCountdown();
+        const timerId = setInterval(updateCountdown, 1000);
+        return () => clearInterval(timerId);
+    }, [nextPollAt]);
 
     const handleScan = (detectedCodes: Array<{ rawValue: string }>) => {
         if (!detectedCodes.length) return;
@@ -1657,6 +1697,9 @@ function App() {
                         version={stateVersion}
                         kvStatus={kvSyncError || kvSyncStatus}
                         lastSyncAt={lastSyncAt}
+                        nextPollInSeconds={nextPollInSeconds}
+                        pollIntervalSeconds={pollIntervalSeconds}
+                        onPollIntervalChange={handlePollIntervalChange}
                         onClose={() => hideTile('status')}
                     />
                 )}
