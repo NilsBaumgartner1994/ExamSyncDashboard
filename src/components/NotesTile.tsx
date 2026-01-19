@@ -1,7 +1,7 @@
 // src/components/NotesTile.tsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActionIcon, Button, Group, Stack, Text, Textarea } from '@mantine/core';
-import { IconLock, IconPencil } from '@tabler/icons-react';
+import { IconEye, IconLock, IconPencil } from '@tabler/icons-react';
 import { TileWrapper } from './TileWrapper';
 
 interface NotesTileProps {
@@ -31,6 +31,7 @@ export function NotesTile({
                               onSpanChange,
                               onClose,
                           }: NotesTileProps) {
+    const [viewMode, setViewMode] = useState<'admin' | 'exam'>('admin');
     const [draft, setDraft] = useState(text);
     const [showForcePrompt, setShowForcePrompt] = useState(false);
     const [focusOnLock, setFocusOnLock] = useState(false);
@@ -59,29 +60,43 @@ export function NotesTile({
     }, [focusOnLock, isLockedByMe]);
 
     const headerActions = useMemo(() => {
-        if (isLockedByOther) {
-            return (
+        const actions: React.ReactNode[] = [
+            (
                 <ActionIcon
+                    key="view"
+                    onClick={() => setViewMode((prev) => (prev === 'admin' ? 'exam' : 'admin'))}
                     variant="light"
-                    color="red"
-                    onClick={onForceLock}
-                    title="Sperre übernehmen"
+                    aria-label="Ansicht wechseln"
                 >
-                    <IconLock size={16} />
+                    <IconEye size={16} />
                 </ActionIcon>
-            );
+            ),
+        ];
+
+        if (viewMode === 'admin') {
+            if (isLockedByOther) {
+                actions.unshift(
+                    <ActionIcon
+                        key="force"
+                        variant="light"
+                        color="red"
+                        onClick={onForceLock}
+                        title="Sperre übernehmen"
+                    >
+                        <IconLock size={16} />
+                    </ActionIcon>,
+                );
+            } else if (!lockedBy) {
+                actions.unshift(
+                    <ActionIcon key="edit" variant="light" onClick={onRequestLock} title="Notizen bearbeiten">
+                        <IconPencil size={16} />
+                    </ActionIcon>,
+                );
+            }
         }
 
-        if (!lockedBy) {
-            return (
-                <ActionIcon variant="light" onClick={onRequestLock} title="Notizen bearbeiten">
-                    <IconPencil size={16} />
-                </ActionIcon>
-            );
-        }
-
-        return null;
-    }, [isLockedByOther, lockedBy, onForceLock, onRequestLock]);
+        return <Group gap="xs">{actions}</Group>;
+    }, [isLockedByOther, lockedBy, onForceLock, onRequestLock, viewMode]);
 
     const handleTextareaClick = () => {
         if (!lockedBy) {
@@ -108,44 +123,50 @@ export function NotesTile({
             headerActions={headerActions}
             onClose={onClose}
         >
-            <Stack>
-                {lockedBy && (
-                    <Text size="xs" c={isLockedByMe ? 'green' : 'red'}>
-                        {isLockedByMe
-                            ? 'Du bearbeitest die Notizen.'
-                            : `Gesperrt von ${lockedByName ?? 'Unbekannt'}.`}
-                    </Text>
-                )}
-                <Textarea
-                    minRows={6}
-                    ref={textareaRef}
-                    value={isLockedByMe ? draft : text}
-                    onChange={(event) => setDraft(event.currentTarget.value)}
-                    readOnly={!isLockedByMe}
-                    placeholder="Gemeinsame Notizen..."
-                    onClick={handleTextareaClick}
-                />
-                {showForcePrompt && (
-                    <Stack gap="xs">
-                        <Text size="xs" c="red">
-                            Feld ist gesperrt von {lockedByName ?? 'Unbekannt'}. Möchten Sie force?
+            {viewMode === 'exam' ? (
+                <Text size="sm" style={{ whiteSpace: 'pre-line' }}>
+                    {text.trim() ? text : 'Keine Notizen vorhanden.'}
+                </Text>
+            ) : (
+                <Stack>
+                    {lockedBy && (
+                        <Text size="xs" c={isLockedByMe ? 'green' : 'red'}>
+                            {isLockedByMe
+                                ? 'Du bearbeitest die Notizen.'
+                                : `Gesperrt von ${lockedByName ?? 'Unbekannt'}.`}
                         </Text>
-                        <Group gap="xs">
-                            <Button size="xs" color="red" onClick={handleForceConfirm}>
-                                Ja
-                            </Button>
-                            <Button size="xs" variant="light" onClick={() => setShowForcePrompt(false)}>
-                                Nein
-                            </Button>
-                        </Group>
-                    </Stack>
-                )}
-                <Group justify="flex-end">
-                    <Button onClick={() => onSave(draft)} disabled={!isLockedByMe}>
-                        Speichern &amp; freigeben
-                    </Button>
-                </Group>
-            </Stack>
+                    )}
+                    <Textarea
+                        minRows={6}
+                        ref={textareaRef}
+                        value={isLockedByMe ? draft : text}
+                        onChange={(event) => setDraft(event.currentTarget.value)}
+                        readOnly={!isLockedByMe}
+                        placeholder="Gemeinsame Notizen..."
+                        onClick={handleTextareaClick}
+                    />
+                    {showForcePrompt && (
+                        <Stack gap="xs">
+                            <Text size="xs" c="red">
+                                Feld ist gesperrt von {lockedByName ?? 'Unbekannt'}. Möchten Sie force?
+                            </Text>
+                            <Group gap="xs">
+                                <Button size="xs" color="red" onClick={handleForceConfirm}>
+                                    Ja
+                                </Button>
+                                <Button size="xs" variant="light" onClick={() => setShowForcePrompt(false)}>
+                                    Nein
+                                </Button>
+                            </Group>
+                        </Stack>
+                    )}
+                    <Group justify="flex-end">
+                        <Button onClick={() => onSave(draft)} disabled={!isLockedByMe}>
+                            Speichern &amp; freigeben
+                        </Button>
+                    </Group>
+                </Stack>
+            )}
         </TileWrapper>
     );
 }

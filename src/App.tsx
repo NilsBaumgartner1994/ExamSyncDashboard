@@ -51,6 +51,9 @@ type StoredState = {
     notesText: string;
     notesLockedBy: string | null;
     notesLockedByName: string | null;
+    announcementText: string;
+    announcementLockedBy: string | null;
+    announcementLockedByName: string | null;
 };
 
 const initialStoredState: StoredState = {
@@ -65,6 +68,9 @@ const initialStoredState: StoredState = {
     notesText: '',
     notesLockedBy: null,
     notesLockedByName: null,
+    announcementText: '',
+    announcementLockedBy: null,
+    announcementLockedByName: null,
 };
 
 const localStateStore: Record<string, StoredState> = {};
@@ -92,6 +98,9 @@ function App() {
     const [notesText, setNotesText] = useState('');
     const [notesLockedBy, setNotesLockedBy] = useState<string | null>(null);
     const [notesLockedByName, setNotesLockedByName] = useState<string | null>(null);
+    const [announcementText, setAnnouncementText] = useState('');
+    const [announcementLockedBy, setAnnouncementLockedBy] = useState<string | null>(null);
+    const [announcementLockedByName, setAnnouncementLockedByName] = useState<string | null>(null);
     const [scanOpened, setScanOpened] = useState(false);
     const [scanError, setScanError] = useState('');
     const [hiddenTiles, setHiddenTiles] = useState<Record<string, boolean>>({});
@@ -159,7 +168,8 @@ function App() {
         { key: 'room-status', label: 'Raum-Status' },
         { key: 'timer', label: 'Klausurzeit' },
         { key: 'chat', label: 'Aufsicht Chat' },
-        { key: 'notes', label: 'Notizen' },
+        { key: 'notes', label: 'Interne Notizen' },
+        { key: 'announcement', label: 'Ankündigung' },
         { key: 'protocol', label: 'Protokoll' },
         { key: 'status', label: 'Verbindung' },
     ];
@@ -248,6 +258,9 @@ function App() {
             notesText,
             notesLockedBy,
             notesLockedByName,
+            announcementText,
+            announcementLockedBy,
+            announcementLockedByName,
         }),
         [
             stateVersion,
@@ -261,6 +274,9 @@ function App() {
             notesText,
             notesLockedBy,
             notesLockedByName,
+            announcementText,
+            announcementLockedBy,
+            announcementLockedByName,
         ],
     );
 
@@ -280,6 +296,9 @@ function App() {
         setNotesText(next.notesText ?? '');
         setNotesLockedBy(next.notesLockedBy ?? null);
         setNotesLockedByName(next.notesLockedByName ?? null);
+        setAnnouncementText(next.announcementText ?? '');
+        setAnnouncementLockedBy(next.announcementLockedBy ?? null);
+        setAnnouncementLockedByName(next.announcementLockedByName ?? null);
     }, []);
 
     const parseStoredState = (rawValue: unknown): StoredState | null => {
@@ -1020,12 +1039,42 @@ function App() {
             if (prev.notesLockedBy !== clientIdRef.current) {
                 return prev;
             }
-            addProtocolEntry('Notizen', `Notizen gespeichert von ${displayName}`);
+            addProtocolEntry('Notizen', `Interne Notizen gespeichert von ${displayName}`);
             return {
                 ...prev,
                 notesText: nextText,
                 notesLockedBy: null,
                 notesLockedByName: null,
+            };
+        });
+    };
+
+    const handleAnnouncementLock = (force = false) => {
+        const displayName = nickname.trim() || 'Anonym';
+        updateSharedState((prev) => {
+            if (prev.announcementLockedBy && prev.announcementLockedBy !== clientIdRef.current && !force) {
+                return prev;
+            }
+            return {
+                ...prev,
+                announcementLockedBy: clientIdRef.current,
+                announcementLockedByName: displayName,
+            };
+        });
+    };
+
+    const handleAnnouncementSave = (nextText: string) => {
+        const displayName = nickname.trim() || 'Anonym';
+        updateSharedState((prev) => {
+            if (prev.announcementLockedBy !== clientIdRef.current) {
+                return prev;
+            }
+            addProtocolEntry('Notizen', `Ankündigung gespeichert von ${displayName}`);
+            return {
+                ...prev,
+                announcementText: nextText,
+                announcementLockedBy: null,
+                announcementLockedByName: null,
             };
         });
     };
@@ -1712,6 +1761,13 @@ function App() {
                                 ...prev,
                                 examEnd: end.toISOString(),
                             }));
+                            addProtocolEntry(
+                                'Klausurzeit',
+                                `Ende gesetzt auf ${end.toLocaleTimeString('de-DE', {
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                })} (in ${min} min)`,
+                            );
                         }}
                         warningMinutes={examWarningMinutes}
                         onSetWarningMinutes={(min) => {
@@ -1719,6 +1775,7 @@ function App() {
                                 ...prev,
                                 examWarningMinutes: min,
                             }));
+                            addProtocolEntry('Klausurzeit', `Warnung gesetzt auf ${min} min`);
                         }}
                         onClose={() => hideTile('timer')}
                     />
@@ -1741,7 +1798,7 @@ function App() {
                 )}
                 {!hiddenTiles.notes && (
                     <NotesTile
-                        title="Notizen"
+                        title="Interne Notizen"
                         text={notesText}
                         lockedBy={notesLockedBy}
                         lockedByName={notesLockedByName}
@@ -1750,6 +1807,19 @@ function App() {
                         onForceLock={() => handleNotesLock(true)}
                         onSave={handleNotesSave}
                         onClose={() => hideTile('notes')}
+                    />
+                )}
+                {!hiddenTiles.announcement && (
+                    <NotesTile
+                        title="Ankündigung"
+                        text={announcementText}
+                        lockedBy={announcementLockedBy}
+                        lockedByName={announcementLockedByName}
+                        myPeerId={clientIdRef.current}
+                        onRequestLock={() => handleAnnouncementLock(false)}
+                        onForceLock={() => handleAnnouncementLock(true)}
+                        onSave={handleAnnouncementSave}
+                        onClose={() => hideTile('announcement')}
                     />
                 )}
                 {!hiddenTiles.protocol && (
