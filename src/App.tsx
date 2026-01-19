@@ -84,7 +84,14 @@ function App() {
         Array<{ id: string; user: string; text: string }>
     >([]);
     const [authScreen, setAuthScreen] = useState<'join' | 'experimental' | 'kv'>('join');
-    const defaultKvWorkerUrl = (import.meta.env.VITE_KV_WORKER_URL as string | undefined)?.trim() ?? '';
+    const defaultKvWorkerUrl = (() => {
+        const envUrl = (import.meta.env.VITE_KV_WORKER_URL as string | undefined)?.trim();
+        if (envUrl) return envUrl;
+        if (typeof window !== 'undefined' && window.location.hostname.endsWith('.workers.dev')) {
+            return window.location.origin;
+        }
+        return '';
+    })();
     const [kvWorkerUrl, setKvWorkerUrl] = useState(() => localStorage.getItem('kvWorkerUrl') ?? defaultKvWorkerUrl);
     const [kvKey, setKvKey] = useState('');
     const [kvValue, setKvValue] = useState('');
@@ -1329,19 +1336,9 @@ function App() {
                             value={kvWorkerUrl}
                             onChange={(event) => setKvWorkerUrl(event.currentTarget.value)}
                         />
-                        <Group justify="space-between" align="center">
-                            <Text size="sm" c="dimmed">
-                                Standard: {defaultKvWorkerUrl || 'Nicht gesetzt'}
-                            </Text>
-                            <Button
-                                size="xs"
-                                variant="light"
-                                disabled={!defaultKvWorkerUrl}
-                                onClick={() => setKvWorkerUrl(defaultKvWorkerUrl)}
-                            >
-                                Standard übernehmen
-                            </Button>
-                        </Group>
+                        <Text size="sm" c="dimmed">
+                            Automatisch erkannt: {defaultKvWorkerUrl || 'Nicht gesetzt'}
+                        </Text>
                         <SimpleGrid cols={{ base: 1, sm: 2 }}>
                             <TextInput
                                 label="Key"
