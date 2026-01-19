@@ -90,7 +90,7 @@ function App() {
         if (typeof window !== 'undefined' && window.location.hostname.endsWith('.workers.dev')) {
             return window.location.origin;
         }
-        return '';
+        return 'https://exam-sync-dashboard.nilsbaumgartner1994.workers.dev';
     })();
     const [kvWorkerUrl, setKvWorkerUrl] = useState(() => localStorage.getItem('kvWorkerUrl') ?? defaultKvWorkerUrl);
     const [kvKey, setKvKey] = useState('');
