@@ -213,6 +213,7 @@ function App() {
             const endpoint = key
                 ? `${baseUrl}/kv/${encodeURIComponent(key)}`
                 : `${baseUrl}/kv`;
+            console.debug('[KV]', 'Request', { method, endpoint, key, hasValue: Boolean(value) });
             const options: RequestInit = {
                 method,
                 headers: {
@@ -227,10 +228,23 @@ function App() {
             const body = contentType.includes('application/json')
                 ? JSON.stringify(await response.json(), null, 2)
                 : await response.text();
+            console.debug('[KV]', 'Response', {
+                method,
+                endpoint,
+                status: response.status,
+                ok: response.ok,
+                contentType,
+            });
             setKvStatus(response.ok ? 'OK' : `Fehler (${response.status})`);
             setKvResponse(body || (response.ok ? 'Keine Antwort.' : 'Leere Antwort vom Worker.'));
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Unbekannter Fehler';
+            console.error('[KV]', 'Request failed', {
+                method,
+                url: trimmedUrl,
+                key,
+                error: message,
+            });
             setKvStatus('Fehler');
             setKvResponse(message);
         } finally {
