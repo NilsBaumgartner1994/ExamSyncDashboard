@@ -592,12 +592,13 @@ function App() {
     };
 
     const saveKvState = useCallback(
-        async (nextState: StoredState, expectedVersion?: number) => {
+        async (nextState: StoredState, expectedVersion?: number, targetRoomId?: string) => {
             const trimmedUrl = resolveWorkerUrl();
-            if (!trimmedUrl || !roomId) {
+            const roomKey = targetRoomId ?? roomId;
+            if (!trimmedUrl || !roomKey) {
                 return { ok: false, status: 0, message: 'KV Worker URL oder Raum-ID fehlt.' };
             }
-            const endpoint = `${normalizeWorkerUrl(trimmedUrl)}/kv/${encodeURIComponent(roomId)}`;
+            const endpoint = `${normalizeWorkerUrl(trimmedUrl)}/kv/${encodeURIComponent(roomKey)}`;
             const response = await fetch(endpoint, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
@@ -746,7 +747,7 @@ function App() {
             }
             const initialState = { ...initialStoredState };
             applyStoredState(initialState);
-            const saved = await saveKvState(initialState, 0);
+            const saved = await saveKvState(initialState, 0, targetRoomId);
             if (!saved.ok) {
                 return { ok: false, created: false, message: saved.message };
             }
