@@ -38,7 +38,6 @@ export function NotesTile({
     const [examFontScale, setExamFontScale] = useState(1);
     const textareaRef = useRef<HTMLTextAreaElement | null>(null);
     const minFontScale = 0.8;
-    const maxFontScale = 1.6;
     const fontScaleStep = 0.1;
 
     const isLockedByMe = lockedBy && myPeerId && lockedBy === myPeerId;
@@ -121,7 +120,7 @@ export function NotesTile({
 
     const updateExamFontScale = (delta: number) => {
         setExamFontScale((prev) => {
-            const next = Math.min(maxFontScale, Math.max(minFontScale, prev + delta));
+            const next = Math.max(minFontScale, prev + delta);
             return Number(next.toFixed(2));
         });
     };
@@ -152,7 +151,6 @@ export function NotesTile({
                             variant="light"
                             onClick={() => updateExamFontScale(fontScaleStep)}
                             aria-label="Schrift vergrößern"
-                            disabled={examFontScale >= maxFontScale}
                         >
                             <IconZoomIn size={16} />
                         </ActionIcon>

@@ -36,7 +36,6 @@ export function ToiletTile({
     const statusLabel = isOccupied ? `Besetzt (${occupants.length})` : 'Frei';
     const examStatusLabel = isBlocked ? 'nicht möglich' : statusLabel;
     const minFontScale = 0.8;
-    const maxFontScale = 1.6;
     const fontScaleStep = 0.1;
     const iconSize = 48 * examFontScale;
 
@@ -57,7 +56,7 @@ export function ToiletTile({
 
     const updateExamFontScale = (delta: number) => {
         setExamFontScale((prev) => {
-            const next = Math.min(maxFontScale, Math.max(minFontScale, prev + delta));
+            const next = Math.max(minFontScale, prev + delta);
             return Number(next.toFixed(2));
         });
     };
@@ -115,7 +114,6 @@ export function ToiletTile({
                                 variant="light"
                                 onClick={() => updateExamFontScale(fontScaleStep)}
                                 aria-label="Schrift vergrößern"
-                                disabled={examFontScale >= maxFontScale}
                             >
                                 <IconZoomIn size={16} />
                             </ActionIcon>

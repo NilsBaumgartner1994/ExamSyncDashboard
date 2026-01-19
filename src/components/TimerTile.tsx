@@ -35,7 +35,6 @@ export function TimerTile({
     const quickMinutes = [30, 40, 60, 70, 90];
     const warningThresholdMs = warningMinutes * 60000;
     const minFontScale = 0.8;
-    const maxFontScale = 1.6;
     const fontScaleStep = 0.1;
 
     useEffect(() => {
@@ -79,7 +78,7 @@ export function TimerTile({
 
     const updateExamFontScale = (delta: number) => {
         setExamFontScale((prev) => {
-            const next = Math.min(maxFontScale, Math.max(minFontScale, prev + delta));
+            const next = Math.max(minFontScale, prev + delta);
             return Number(next.toFixed(2));
         });
     };
@@ -132,7 +131,6 @@ export function TimerTile({
                                 variant="light"
                                 onClick={() => updateExamFontScale(fontScaleStep)}
                                 aria-label="Schrift vergrößern"
-                                disabled={examFontScale >= maxFontScale}
                             >
                                 <IconZoomIn size={16} />
                             </ActionIcon>
