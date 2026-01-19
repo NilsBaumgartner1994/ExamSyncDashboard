@@ -1,5 +1,15 @@
 https://nilsbaumgartner1994.github.io/ExamSyncDashboard/
 
+## Cloudflare KV Worker
+
+Dieses Projekt enthält einen Cloudflare Worker für den KV-Store. Lege eine KV-namespace an und binde sie im Cloudflare-Dashboard unter "Bindings" als `EXAM_SYNC_KV` an. Danach kannst du den Worker deployen:
+
+```bash
+npx wrangler deploy
+```
+
+Wenn das Dashboard über `*.workers.dev` läuft, wird die Worker-URL automatisch übernommen. Für andere Domains kannst du `VITE_KV_WORKER_URL` als öffentliches Build-Variable in der Cloudflare-UI unter "Variables and secrets" setzen.
+
 
 # React + Vite
 
