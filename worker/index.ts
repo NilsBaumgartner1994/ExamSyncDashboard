@@ -69,14 +69,60 @@ export default {
                     return jsonResponse({ error: 'Missing value', requestId }, { status: 400 });
                 }
                 let value: unknown = rawBody;
+                let expectedVersion: number | undefined;
                 try {
                     const parsed = JSON.parse(rawBody);
-                    value = typeof parsed === 'object' && parsed !== null && 'value' in parsed ? parsed.value : parsed;
+                    if (typeof parsed === 'object' && parsed !== null) {
+                        if ('value' in parsed) {
+                            value = (parsed as { value?: unknown }).value;
+                        } else {
+                            value = parsed;
+                        }
+                        if ('expectedVersion' in parsed) {
+                            const rawVersion = (parsed as { expectedVersion?: unknown }).expectedVersion;
+                            if (typeof rawVersion === 'number') {
+                                expectedVersion = rawVersion;
+                            }
+                        }
+                    } else {
+                        value = parsed;
+                    }
                 } catch {
                     // Keep raw text value when JSON parsing fails.
                 }
                 if (value === undefined) {
                     return jsonResponse({ error: 'Missing value', requestId }, { status: 400 });
+                }
+                if (typeof expectedVersion === 'number') {
+                    const existing = await env.EXAM_SYNC_KV.get(key);
+                    if (existing === null) {
+                        if (expectedVersion !== 0) {
+                            return jsonResponse(
+                                { error: 'Version mismatch', requestId, currentVersion: null },
+                                { status: 409 },
+                            );
+                        }
+                    } else {
+                        let currentVersion: number | null = null;
+                        try {
+                            const parsedExisting = JSON.parse(existing);
+                            if (
+                                parsedExisting &&
+                                typeof parsedExisting === 'object' &&
+                                typeof (parsedExisting as { version?: unknown }).version === 'number'
+                            ) {
+                                currentVersion = (parsedExisting as { version: number }).version;
+                            }
+                        } catch {
+                            // ignore parse errors
+                        }
+                        if (currentVersion === null || currentVersion !== expectedVersion) {
+                            return jsonResponse(
+                                { error: 'Version mismatch', requestId, currentVersion },
+                                { status: 409 },
+                            );
+                        }
+                    }
                 }
                 const stored = typeof value === 'string' ? value : JSON.stringify(value);
                 await env.EXAM_SYNC_KV.put(key, stored);

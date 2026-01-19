@@ -1,13 +1,15 @@
 // src/components/StatusTile.tsx
 import React from 'react';
-import { Badge, Stack, Text } from '@mantine/core';
+import { Stack, Text } from '@mantine/core';
 import { TileWrapper } from './TileWrapper';
 import { formatRoomIdForDisplay } from '../utils/roomCode';
 
 interface StatusTileProps {
     title: string;
-    peerId: string | undefined;
-    connectedPeers: string[];
+    roomId: string;
+    version: number;
+    kvStatus: string;
+    lastSyncAt: Date | null;
     defaultSpan?: number;
     onSpanChange?: (span: number) => void;
     onClose?: () => void;
@@ -15,8 +17,10 @@ interface StatusTileProps {
 
 export function StatusTile({
                                title,
-                               peerId,
-                               connectedPeers,
+                               roomId,
+                               version,
+                               kvStatus,
+                               lastSyncAt,
                                defaultSpan = 2,
                                onSpanChange,
                                onClose,
@@ -30,17 +34,19 @@ export function StatusTile({
         >
             <Stack>
                 <Text>
-                    <strong>Eigene ID:</strong>{' '}
-                    {peerId ? formatRoomIdForDisplay(peerId) : 'Nicht verbunden'}
+                    <strong>Raum-ID:</strong>{' '}
+                    {roomId ? formatRoomIdForDisplay(roomId) : 'Nicht verbunden'}
                 </Text>
-                <Text><strong>Verbunden mit:</strong></Text>
-                {connectedPeers.length > 0 ? (
-                    connectedPeers.map((pid, i) => (
-                        <Badge key={i}>{formatRoomIdForDisplay(pid)}</Badge>
-                    ))
-                ) : (
-                    <Text>Keine weiteren Peers verbunden</Text>
-                )}
+                <Text>
+                    <strong>Version:</strong> {version}
+                </Text>
+                <Text>
+                    <strong>KV-Status:</strong> {kvStatus || 'Keine aktuellen Updates'}
+                </Text>
+                <Text>
+                    <strong>Letzter Sync:</strong>{' '}
+                    {lastSyncAt ? lastSyncAt.toLocaleTimeString('de-DE') : 'Noch nicht synchronisiert'}
+                </Text>
             </Stack>
         </TileWrapper>
     );
