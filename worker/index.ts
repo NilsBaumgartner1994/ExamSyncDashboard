@@ -7,6 +7,7 @@ const jsonResponse = (body: unknown, init?: ResponseInit) =>
         ...init,
         headers: {
             'Content-Type': 'application/json',
+            'Cache-Control': 'no-store',
             'Access-Control-Allow-Origin': '*',
             'Access-Control-Allow-Methods': 'GET,PUT,DELETE,OPTIONS',
             'Access-Control-Allow-Headers': 'Content-Type',
@@ -18,6 +19,7 @@ const emptyResponse = (status = 204) =>
     new Response(null, {
         status,
         headers: {
+            'Cache-Control': 'no-store',
             'Access-Control-Allow-Origin': '*',
             'Access-Control-Allow-Methods': 'GET,PUT,DELETE,OPTIONS',
             'Access-Control-Allow-Headers': 'Content-Type',

@@ -281,6 +281,7 @@ function App() {
                 headers: {
                     'Content-Type': 'application/json',
                 },
+                cache: 'no-store',
             };
             if (method === 'PUT') {
                 options.body = JSON.stringify({ value });
@@ -579,6 +580,7 @@ function App() {
             const response = await fetch(endpoint, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
+                cache: 'no-store',
                 body: JSON.stringify({ value: nextState, expectedVersion }),
             });
             const payload = response.headers.get('content-type')?.includes('application/json')
@@ -605,7 +607,7 @@ function App() {
                 if (!options?.silent) {
                     setKvSyncStatus('Lade aktuellen Status…');
                 }
-                const response = await fetch(endpoint);
+                const response = await fetch(endpoint, { cache: 'no-store' });
                 if (!response.ok) {
                     const errorMessage = `Laden fehlgeschlagen (${response.status}).`;
                     setKvSyncError(errorMessage);
@@ -654,7 +656,7 @@ function App() {
             }
             const endpoint = `${normalizeWorkerUrl(trimmedUrl)}/kv/${encodeURIComponent(targetRoomId)}`;
             try {
-                const response = await fetch(endpoint);
+                const response = await fetch(endpoint, { cache: 'no-store' });
                 if (!response.ok) {
                     return {
                         state: null,
