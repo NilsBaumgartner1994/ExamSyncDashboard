@@ -1,7 +1,7 @@
 // src/components/NotesTile.tsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActionIcon, Button, Group, Stack, Text, Textarea } from '@mantine/core';
-import { IconEye, IconLock, IconPencil } from '@tabler/icons-react';
+import { IconEye, IconLock, IconPencil, IconZoomIn, IconZoomOut } from '@tabler/icons-react';
 import { TileWrapper } from './TileWrapper';
 
 interface NotesTileProps {
@@ -35,7 +35,11 @@ export function NotesTile({
     const [draft, setDraft] = useState(text);
     const [showForcePrompt, setShowForcePrompt] = useState(false);
     const [focusOnLock, setFocusOnLock] = useState(false);
+    const [examFontScale, setExamFontScale] = useState(1);
     const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+    const minFontScale = 0.8;
+    const maxFontScale = 1.6;
+    const fontScaleStep = 0.1;
 
     const isLockedByMe = lockedBy && myPeerId && lockedBy === myPeerId;
     const isLockedByOther = lockedBy && (!myPeerId || lockedBy !== myPeerId);
@@ -115,6 +119,13 @@ export function NotesTile({
         onForceLock();
     };
 
+    const updateExamFontScale = (delta: number) => {
+        setExamFontScale((prev) => {
+            const next = Math.min(maxFontScale, Math.max(minFontScale, prev + delta));
+            return Number(next.toFixed(2));
+        });
+    };
+
     return (
         <TileWrapper
             title={title}
@@ -124,9 +135,29 @@ export function NotesTile({
             onClose={onClose}
         >
             {viewMode === 'exam' ? (
-                <Text size="sm" style={{ whiteSpace: 'pre-line' }}>
-                    {text.trim() ? text : 'Keine Notizen vorhanden.'}
-                </Text>
+                <Stack gap="xs">
+                    <Text size="sm" style={{ whiteSpace: 'pre-line', fontSize: `${1 * examFontScale}em` }}>
+                        {text.trim() ? text : 'Keine Notizen vorhanden.'}
+                    </Text>
+                    <Group gap={6} justify="flex-end" w="100%">
+                        <ActionIcon
+                            variant="light"
+                            onClick={() => updateExamFontScale(-fontScaleStep)}
+                            aria-label="Schrift verkleinern"
+                            disabled={examFontScale <= minFontScale}
+                        >
+                            <IconZoomOut size={16} />
+                        </ActionIcon>
+                        <ActionIcon
+                            variant="light"
+                            onClick={() => updateExamFontScale(fontScaleStep)}
+                            aria-label="Schrift vergrößern"
+                            disabled={examFontScale >= maxFontScale}
+                        >
+                            <IconZoomIn size={16} />
+                        </ActionIcon>
+                    </Group>
+                </Stack>
             ) : (
                 <Stack>
                     {lockedBy && (

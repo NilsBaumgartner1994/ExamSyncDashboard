@@ -1,7 +1,7 @@
 // src/components/ToiletTile.tsx
 import React, { Fragment, useMemo, useState } from 'react';
 import { ActionIcon, Button, Center, Checkbox, Divider, Group, Stack, Text, TextInput } from '@mantine/core';
-import { IconEye, IconToiletPaper } from '@tabler/icons-react';
+import { IconEye, IconToiletPaper, IconZoomIn, IconZoomOut } from '@tabler/icons-react';
 import { TileWrapper } from './TileWrapper';
 
 type ToiletViewMode = 'admin' | 'exam';
@@ -31,9 +31,14 @@ export function ToiletTile({
 }: ToiletTileProps) {
     const [viewMode, setViewMode] = useState<ToiletViewMode>('admin');
     const [nameInput, setNameInput] = useState('');
+    const [examFontScale, setExamFontScale] = useState(1);
     const isOccupied = occupants.length > 0;
     const statusLabel = isOccupied ? `Besetzt (${occupants.length})` : 'Frei';
     const examStatusLabel = isBlocked ? 'nicht möglich' : statusLabel;
+    const minFontScale = 0.8;
+    const maxFontScale = 1.6;
+    const fontScaleStep = 0.1;
+    const iconSize = 48 * examFontScale;
 
     const examCardStyle = useMemo(() => {
         if (viewMode !== 'exam' || isBlocked) return undefined;
@@ -48,6 +53,13 @@ export function ToiletTile({
         if (!trimmed) return;
         onOccupy(trimmed);
         setNameInput('');
+    };
+
+    const updateExamFontScale = (delta: number) => {
+        setExamFontScale((prev) => {
+            const next = Math.min(maxFontScale, Math.max(minFontScale, prev + delta));
+            return Number(next.toFixed(2));
+        });
     };
 
     return (
@@ -69,9 +81,9 @@ export function ToiletTile({
         >
             {viewMode === 'exam' ? (
                 <Center>
-                    <Stack align="center" gap="xs">
-                        <div style={{ position: 'relative', width: 56, height: 56 }}>
-                            <IconToiletPaper size={48} style={{ position: 'absolute', inset: 4 }} />
+                    <Stack align="center" gap="xs" w="100%">
+                        <div style={{ position: 'relative', width: iconSize + 8, height: iconSize + 8 }}>
+                            <IconToiletPaper size={iconSize} style={{ position: 'absolute', inset: 4 }} />
                             {isBlocked && (
                                 <div
                                     style={{
@@ -87,7 +99,27 @@ export function ToiletTile({
                                 />
                             )}
                         </div>
-                        <Text fw={600}>{examStatusLabel}</Text>
+                        <Text fw={600} style={{ fontSize: `${1.1 * examFontScale}em` }}>
+                            {examStatusLabel}
+                        </Text>
+                        <Group gap={6} justify="flex-end" w="100%">
+                            <ActionIcon
+                                variant="light"
+                                onClick={() => updateExamFontScale(-fontScaleStep)}
+                                aria-label="Schrift verkleinern"
+                                disabled={examFontScale <= minFontScale}
+                            >
+                                <IconZoomOut size={16} />
+                            </ActionIcon>
+                            <ActionIcon
+                                variant="light"
+                                onClick={() => updateExamFontScale(fontScaleStep)}
+                                aria-label="Schrift vergrößern"
+                                disabled={examFontScale >= maxFontScale}
+                            >
+                                <IconZoomIn size={16} />
+                            </ActionIcon>
+                        </Group>
                     </Stack>
                 </Center>
             ) : (
