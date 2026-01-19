@@ -178,6 +178,14 @@ function App() {
     };
 
     const normalizeWorkerUrl = (url: string) => url.replace(/\/+$/, '');
+    const normalizeKvKey = (rawKey: string) => {
+        const trimmed = rawKey.trim();
+        if (!trimmed) return '';
+        const urlMatch = trimmed.match(/^https?:\/\/[^/]+(\/.*)?$/i);
+        const path = urlMatch ? urlMatch[1] ?? '' : trimmed;
+        const kvPrefixMatch = path.match(/^\/?kv\/(.+)$/i);
+        return (kvPrefixMatch ? kvPrefixMatch[1] : trimmed).trim();
+    };
     const resolveWorkerUrl = useCallback(() => {
         const trimmed = kvWorkerUrl.trim();
         if (trimmed) return trimmed;
@@ -262,18 +270,25 @@ function App() {
             setKvResponse('Bitte Worker-URL angeben.');
             return;
         }
-        if (method !== 'GET' && !key) {
+        const normalizedKey = key ? normalizeKvKey(key) : '';
+        if (method !== 'GET' && method !== 'DELETE' && !normalizedKey) {
             setKvStatus('Fehler');
             setKvResponse('Bitte einen Key angeben.');
             return;
+        }
+        if (method === 'DELETE' && !normalizedKey) {
+            const confirmed = window.confirm('Wirklich alle Keys im KV Store löschen?');
+            if (!confirmed) {
+                return;
+            }
         }
         setKvLoading(true);
         setKvStatus('Wird geladen...');
         setKvResponse('');
         try {
             const baseUrl = normalizeWorkerUrl(trimmedUrl);
-            const endpoint = key
-                ? `${baseUrl}/kv/${encodeURIComponent(key)}`
+            const endpoint = normalizedKey
+                ? `${baseUrl}/kv/${encodeURIComponent(normalizedKey)}`
                 : `${baseUrl}/kv`;
             console.debug('[KV]', 'Request', { method, endpoint, key, hasValue: Boolean(value) });
             const options: RequestInit = {
@@ -305,7 +320,7 @@ function App() {
             console.error('[KV]', 'Request failed', {
                 method,
                 url: trimmedUrl,
-                key,
+                key: normalizedKey || key,
                 error: message,
             });
             setKvStatus('Fehler');
@@ -1215,8 +1230,8 @@ function App() {
                         </Group>
                         <Text size="sm" c="dimmed">
                             Dieser Screen sendet Requests an deinen Cloudflare Worker. Der Worker sollte die
-                            Endpunkte <code>/kv</code> (Liste) sowie <code>/kv/&lt;key&gt;</code> (GET/PUT/DELETE)
-                            unterstützen.
+                            Endpunkte <code>/kv</code> (Liste, DELETE alle Keys) sowie <code>/kv/&lt;key&gt;</code>{' '}
+                            (GET/PUT/DELETE) unterstützen.
                         </Text>
                         <TextInput
                             label="Worker-URL"
@@ -1232,7 +1247,7 @@ function App() {
                                 label="Key"
                                 placeholder="z. B. 123456"
                                 value={kvKey}
-                                onChange={(event) => setKvKey(event.currentTarget.value)}
+                                onChange={(event) => setKvKey(normalizeKvKey(event.currentTarget.value))}
                             />
                             <Textarea
                                 label="Value (JSON oder Text)"
@@ -1269,6 +1284,14 @@ function App() {
                                 onClick={() => performKvRequest('DELETE', kvKey)}
                             >
                                 Löschen
+                            </Button>
+                            <Button
+                                color="red"
+                                variant="light"
+                                loading={kvLoading}
+                                onClick={() => performKvRequest('DELETE')}
+                            >
+                                Alle löschen
                             </Button>
                             <Button
                                 variant="light"
