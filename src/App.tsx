@@ -1384,22 +1384,6 @@ function App() {
                             Kein zuletzt verbundener Raum gespeichert.
                         </Text>
                     )}
-                    {lastConnectedRooms.length > 0 && (
-                        <>
-                            <Divider my="sm" label="Zuletzt beigetretene Räume" labelPosition="center" />
-                            <Group gap="xs" wrap="wrap">
-                                {lastConnectedRooms.map((room) => (
-                                    <Button
-                                        key={room}
-                                        variant={room === lastConnectedRoom ? 'outline' : 'light'}
-                                        onClick={() => handleJoin(room)}
-                                    >
-                                        {formatRoomIdForDisplay(room)}
-                                    </Button>
-                                ))}
-                            </Group>
-                        </>
-                    )}
                     <Divider my="sm" label="Oder neuen Link erstellen" labelPosition="center" />
                     <Button onClick={() => handleJoin()}>Eigenen Link erstellen</Button>
                     <Text size="xs" c="dimmed">
