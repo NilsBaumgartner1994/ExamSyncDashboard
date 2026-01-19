@@ -7,6 +7,7 @@ import { formatRoomIdForDisplay } from '../utils/roomCode';
 interface StatusTileProps {
     title: string;
     roomId: string;
+    kvKey: string;
     version: number;
     kvStatus: string;
     lastSyncAt: Date | null;
@@ -18,6 +19,7 @@ interface StatusTileProps {
 export function StatusTile({
                                title,
                                roomId,
+                               kvKey,
                                version,
                                kvStatus,
                                lastSyncAt,
@@ -36,6 +38,10 @@ export function StatusTile({
                 <Text>
                     <strong>Raum-ID:</strong>{' '}
                     {roomId ? formatRoomIdForDisplay(roomId) : 'Nicht verbunden'}
+                </Text>
+                <Text>
+                    <strong>Key:</strong>{' '}
+                    {kvKey ? formatRoomIdForDisplay(kvKey) : 'Nicht gesetzt'}
                 </Text>
                 <Text>
                     <strong>Version:</strong> {version}

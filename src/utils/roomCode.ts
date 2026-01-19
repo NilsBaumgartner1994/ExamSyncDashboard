@@ -1,4 +1,7 @@
-export const normalizeRoomCode = (code: string) => code.trim().replace(/\s+/g, '');
+export const normalizeRoomCode = (code: string) =>
+    code.replace(/\D/g, '').trim().slice(0, 6);
+
+export const isValidRoomCode = (code: string) => /^\d{6}$/.test(code);
 
 export const formatRoomIdForDisplay = (roomId: string) => {
     const normalized = normalizeRoomCode(roomId);
