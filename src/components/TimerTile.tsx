@@ -1,7 +1,7 @@
 // src/components/TimerTile.tsx
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActionIcon, Button, Center, Group, Stack, Text, TextInput } from '@mantine/core';
-import { IconEye } from '@tabler/icons-react';
+import { ActionIcon, Box, Button, Center, Group, Stack, Text, TextInput } from '@mantine/core';
+import { IconEye, IconZoomIn, IconZoomOut } from '@tabler/icons-react';
 import { TileWrapper } from './TileWrapper';
 
 interface TimerTileProps {
@@ -30,9 +30,13 @@ export function TimerTile({
     const [warningInput, setWarningInput] = useState(`${warningMinutes}`);
     const [remaining, setRemaining] = useState('');
     const [remainingMs, setRemainingMs] = useState<number | null>(null);
+    const [examFontScale, setExamFontScale] = useState(1);
 
     const quickMinutes = [30, 40, 60, 70, 90];
     const warningThresholdMs = warningMinutes * 60000;
+    const minFontScale = 0.8;
+    const maxFontScale = 1.6;
+    const fontScaleStep = 0.1;
 
     useEffect(() => {
         const interval = setInterval(() => {
@@ -73,6 +77,13 @@ export function TimerTile({
         }
     };
 
+    const updateExamFontScale = (delta: number) => {
+        setExamFontScale((prev) => {
+            const next = Math.min(maxFontScale, Math.max(minFontScale, prev + delta));
+            return Number(next.toFixed(2));
+        });
+    };
+
     const examCardStyle = useMemo(() => {
         if (viewMode !== 'exam' || remainingMs === null) return undefined;
         if (remainingMs <= 0) {
@@ -102,12 +113,34 @@ export function TimerTile({
             )}
         >
             {viewMode === 'exam' ? (
-                <Center>
-                    <Stack align="center" gap="xs">
-                        <Text size="sm" c="dimmed">Restzeit</Text>
-                        <Text size="xl" fw={600} style={{ fontSize: '2em' }}>{remaining}</Text>
-                    </Stack>
-                </Center>
+                <Box pos="relative">
+                    <Center>
+                        <Stack align="center" gap="xs">
+                            <Text size="sm" c="dimmed">Restzeit</Text>
+                            <Text size="xl" fw={600} style={{ fontSize: `${2 * examFontScale}em` }}>
+                                {remaining}
+                            </Text>
+                        </Stack>
+                    </Center>
+                    <Group gap={6} pos="absolute" bottom={8} right={8}>
+                        <ActionIcon
+                            variant="light"
+                            onClick={() => updateExamFontScale(-fontScaleStep)}
+                            aria-label="Schrift verkleinern"
+                            disabled={examFontScale <= minFontScale}
+                        >
+                            <IconZoomOut size={16} />
+                        </ActionIcon>
+                        <ActionIcon
+                            variant="light"
+                            onClick={() => updateExamFontScale(fontScaleStep)}
+                            aria-label="Schrift vergrößern"
+                            disabled={examFontScale >= maxFontScale}
+                        >
+                            <IconZoomIn size={16} />
+                        </ActionIcon>
+                    </Group>
+                </Box>
             ) : (
                 <Stack>
                     <Text ta="center">Restzeit: {remaining}</Text>
