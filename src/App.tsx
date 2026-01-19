@@ -83,7 +83,13 @@ function App() {
     const [p2pChatMessages, setP2pChatMessages] = useState<
         Array<{ id: string; user: string; text: string }>
     >([]);
-    const [authScreen, setAuthScreen] = useState<'join' | 'experimental'>('join');
+    const [authScreen, setAuthScreen] = useState<'join' | 'experimental' | 'kv'>('join');
+    const [kvWorkerUrl, setKvWorkerUrl] = useState(() => localStorage.getItem('kvWorkerUrl') ?? '');
+    const [kvKey, setKvKey] = useState('');
+    const [kvValue, setKvValue] = useState('');
+    const [kvStatus, setKvStatus] = useState('');
+    const [kvResponse, setKvResponse] = useState('');
+    const [kvLoading, setKvLoading] = useState(false);
     const [p2pRole, setP2pRole] = useState<'host' | 'client' | null>(null);
     const p2pPeerRef = useRef<SimplePeer.Instance | null>(null);
     const p2pCopyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -169,6 +175,69 @@ function App() {
         }
         return normalizeRoomCode(rawValue);
     };
+
+    const normalizeWorkerUrl = (url: string) => url.replace(/\/+$/, '');
+
+    const resetKvState = () => {
+        setKvKey('');
+        setKvValue('');
+        setKvStatus('');
+        setKvResponse('');
+    };
+
+    const performKvRequest = async (method: 'GET' | 'PUT' | 'DELETE', key?: string, value?: string) => {
+        const trimmedUrl = kvWorkerUrl.trim();
+        if (!trimmedUrl) {
+            setKvStatus('Fehler');
+            setKvResponse('Bitte Worker-URL angeben.');
+            return;
+        }
+        if (method !== 'GET' && !key) {
+            setKvStatus('Fehler');
+            setKvResponse('Bitte einen Key angeben.');
+            return;
+        }
+        setKvLoading(true);
+        setKvStatus('Wird geladen...');
+        setKvResponse('');
+        try {
+            const baseUrl = normalizeWorkerUrl(trimmedUrl);
+            const endpoint = key
+                ? `${baseUrl}/kv/${encodeURIComponent(key)}`
+                : `${baseUrl}/kv`;
+            const options: RequestInit = {
+                method,
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            };
+            if (method === 'PUT') {
+                options.body = JSON.stringify({ value });
+            }
+            const response = await fetch(endpoint, options);
+            const contentType = response.headers.get('content-type') ?? '';
+            const body = contentType.includes('application/json')
+                ? JSON.stringify(await response.json(), null, 2)
+                : await response.text();
+            setKvStatus(response.ok ? 'OK' : `Fehler (${response.status})`);
+            setKvResponse(body || (response.ok ? 'Keine Antwort.' : 'Leere Antwort vom Worker.'));
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unbekannter Fehler';
+            setKvStatus('Fehler');
+            setKvResponse(message);
+        } finally {
+            setKvLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        const trimmedUrl = kvWorkerUrl.trim();
+        if (trimmedUrl) {
+            localStorage.setItem('kvWorkerUrl', trimmedUrl);
+        } else {
+            localStorage.removeItem('kvWorkerUrl');
+        }
+    }, [kvWorkerUrl]);
 
     const rememberLastHost = (peerId: string) => {
         const normalized = normalizeRoomCode(peerId);
@@ -1232,6 +1301,99 @@ function App() {
                 </Container>
             );
         }
+        if (authScreen === 'kv') {
+            return (
+                <Container size="md" mt="xl">
+                    <Stack>
+                        <Group justify="space-between">
+                            <Title order={2}>Experimental KV Storage</Title>
+                            <Button
+                                variant="light"
+                                onClick={() => {
+                                    resetKvState();
+                                    setAuthScreen('join');
+                                }}
+                            >
+                                Zurück zum Login
+                            </Button>
+                        </Group>
+                        <Text size="sm" c="dimmed">
+                            Dieser Screen sendet Requests an deinen Cloudflare Worker. Der Worker sollte die
+                            Endpunkte <code>/kv</code> (Liste) sowie <code>/kv/&lt;key&gt;</code> (GET/PUT/DELETE)
+                            unterstützen.
+                        </Text>
+                        <TextInput
+                            label="Worker-URL"
+                            placeholder="https://dein-worker.example.workers.dev"
+                            value={kvWorkerUrl}
+                            onChange={(event) => setKvWorkerUrl(event.currentTarget.value)}
+                        />
+                        <SimpleGrid cols={{ base: 1, sm: 2 }}>
+                            <TextInput
+                                label="Key"
+                                placeholder="z. B. exam:room:1234"
+                                value={kvKey}
+                                onChange={(event) => setKvKey(event.currentTarget.value)}
+                            />
+                            <Textarea
+                                label="Value (JSON oder Text)"
+                                placeholder={'{ "status": "ready" }'}
+                                minRows={3}
+                                value={kvValue}
+                                onChange={(event) => setKvValue(event.currentTarget.value)}
+                            />
+                        </SimpleGrid>
+                        <Group grow>
+                            <Button
+                                loading={kvLoading}
+                                onClick={() => {
+                                    if (!kvKey.trim()) {
+                                        setKvStatus('Fehler');
+                                        setKvResponse('Bitte einen Key angeben.');
+                                        return;
+                                    }
+                                    performKvRequest('GET', kvKey);
+                                }}
+                            >
+                                Lesen
+                            </Button>
+                            <Button
+                                loading={kvLoading}
+                                onClick={() => performKvRequest('PUT', kvKey, kvValue)}
+                            >
+                                Speichern
+                            </Button>
+                            <Button
+                                color="red"
+                                variant="light"
+                                loading={kvLoading}
+                                onClick={() => performKvRequest('DELETE', kvKey)}
+                            >
+                                Löschen
+                            </Button>
+                            <Button
+                                variant="light"
+                                loading={kvLoading}
+                                onClick={() => performKvRequest('GET')}
+                            >
+                                Liste
+                            </Button>
+                        </Group>
+                        {kvStatus && (
+                            <Text size="sm" c={kvStatus.startsWith('Fehler') ? 'red' : 'dimmed'}>
+                                Status: {kvStatus}
+                            </Text>
+                        )}
+                        <Textarea
+                            label="Antwort"
+                            minRows={6}
+                            value={kvResponse}
+                            readOnly
+                        />
+                    </Stack>
+                </Container>
+            );
+        }
         return (
             <Container size="xs" mt="xl">
                 <Title order={2} mb="md">Prüfungsaufsichts-Dashboard</Title>
@@ -1302,15 +1464,26 @@ function App() {
                         {createRoomError ? ` Fehler: ${createRoomError}` : ''}
                     </Text>
                     <Divider my="sm" label="Experimentell" labelPosition="center" />
-                    <Button
-                        variant="light"
-                        onClick={() => {
-                            resetExperimentalState();
-                            setAuthScreen('experimental');
-                        }}
-                    >
-                        Experimental Peer-to-Peer
-                    </Button>
+                    <Group grow>
+                        <Button
+                            variant="light"
+                            onClick={() => {
+                                resetExperimentalState();
+                                setAuthScreen('experimental');
+                            }}
+                        >
+                            Experimental Peer-to-Peer
+                        </Button>
+                        <Button
+                            variant="light"
+                            onClick={() => {
+                                resetKvState();
+                                setAuthScreen('kv');
+                            }}
+                        >
+                            Experimental KV Storage
+                        </Button>
+                    </Group>
                 </Stack>
                 <Modal
                     opened={scanOpened}
