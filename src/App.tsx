@@ -142,7 +142,7 @@ function App() {
         { key: 'toilet', label: 'Toilette' },
         { key: 'room-status', label: 'Raum-Status' },
         { key: 'timer', label: 'Klausurzeit' },
-        { key: 'chat', label: 'Dozenten-Chat' },
+        { key: 'chat', label: 'Aufsicht Chat' },
         { key: 'notes', label: 'Notizen' },
         { key: 'protocol', label: 'Protokoll' },
         { key: 'status', label: 'Verbindung' },
@@ -1612,7 +1612,7 @@ function App() {
                 )}
                 {!hiddenTiles.chat && (
                     <ChatTile
-                        title="Dozenten-Chat"
+                        title="Aufsicht Chat"
                         messages={messages}
                         onSend={(msg) => {
                             updateSharedState((prev) => ({
