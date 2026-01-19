@@ -1230,7 +1230,7 @@ function App() {
                         <SimpleGrid cols={{ base: 1, sm: 2 }}>
                             <TextInput
                                 label="Key"
-                                placeholder="z. B. exam:room:1234"
+                                placeholder="z. B. 123456"
                                 value={kvKey}
                                 onChange={(event) => setKvKey(event.currentTarget.value)}
                             />
@@ -1275,7 +1275,7 @@ function App() {
                                 loading={kvLoading}
                                 onClick={() => performKvRequest('GET')}
                             >
-                                Liste
+                                Alle Keys
                             </Button>
                         </Group>
                         {kvStatus && (
