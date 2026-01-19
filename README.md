@@ -1,5 +1,16 @@
 https://nilsbaumgartner1994.github.io/ExamSyncDashboard/
 
+## Cloudflare KV Worker
+
+Dieses Projekt enthält einen Cloudflare Worker für den KV-Store. Lege eine KV-namespace an und trage die IDs in `wrangler.toml` ein. Danach kannst du den Worker deployen:
+
+```bash
+npx wrangler deploy
+```
+
+Setze anschließend die Worker-URL im Frontend über `VITE_KV_WORKER_URL` (siehe `.env.example`), damit der KV-Screen die URL automatisch übernimmt.
+
+
 
 # React + Vite
 
