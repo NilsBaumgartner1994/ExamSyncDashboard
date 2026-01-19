@@ -19,6 +19,7 @@ import {
     Group,
     Card,
     Textarea,
+    Checkbox,
 } from '@mantine/core';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import { TimerTile } from './components/TimerTile';
@@ -66,8 +67,11 @@ const initialStoredState: StoredState = {
     notesLockedByName: null,
 };
 
+const localStateStore: Record<string, StoredState> = {};
+
 const defaultPollIntervalSeconds = 5;
 const pollIntervalStorageKey = 'kvPollIntervalSeconds';
+const localSyncStorageKey = 'localDebugStateSync';
 
 function App() {
     const [nickname, setNickname] = useState('Anonym');
@@ -99,6 +103,10 @@ function App() {
     const [kvSyncStatus, setKvSyncStatus] = useState('');
     const [kvSyncError, setKvSyncError] = useState('');
     const [lastSyncAt, setLastSyncAt] = useState<Date | null>(null);
+    const [useLocalStateSync, setUseLocalStateSync] = useState(() => {
+        if (typeof localStorage === 'undefined') return false;
+        return localStorage.getItem(localSyncStorageKey) === 'true';
+    });
     const [pollIntervalSeconds, setPollIntervalSeconds] = useState(() => {
         if (typeof localStorage === 'undefined') return defaultPollIntervalSeconds;
         const stored = Number(localStorage.getItem(pollIntervalStorageKey));
@@ -221,6 +229,11 @@ function App() {
             localStorage.setItem(pollIntervalStorageKey, String(rounded));
         }
     }, []);
+
+    useEffect(() => {
+        if (typeof localStorage === 'undefined') return;
+        localStorage.setItem(localSyncStorageKey, String(useLocalStateSync));
+    }, [useLocalStateSync]);
 
     const buildStoredState = useCallback(
         () => ({
@@ -608,12 +621,24 @@ function App() {
         }
     };
 
-    const saveKvState = useCallback(
+    const saveSharedState = useCallback(
         async (nextState: StoredState, expectedVersion?: number, targetRoomId?: string) => {
-            const trimmedUrl = resolveWorkerUrl();
             const roomKey = targetRoomId ?? roomId;
-            if (!trimmedUrl || !roomKey) {
-                return { ok: false, status: 0, message: 'KV Worker URL oder Raum-ID fehlt.' };
+            if (!roomKey) {
+                return { ok: false, status: 0, message: 'Raum-ID fehlt.' };
+            }
+            if (useLocalStateSync) {
+                const existing = localStateStore[roomKey];
+                const currentVersion = existing?.version ?? 0;
+                if (typeof expectedVersion === 'number' && currentVersion !== expectedVersion) {
+                    return { ok: false, status: 409, message: 'Lokaler Konflikt: Version stimmt nicht überein.' };
+                }
+                localStateStore[roomKey] = nextState;
+                return { ok: true, status: 200 };
+            }
+            const trimmedUrl = resolveWorkerUrl();
+            if (!trimmedUrl) {
+                return { ok: false, status: 0, message: 'KV Worker URL fehlt.' };
             }
             const endpoint = `${normalizeWorkerUrl(trimmedUrl)}/kv/${encodeURIComponent(roomKey)}`;
             const response = await fetch(endpoint, {
@@ -631,14 +656,41 @@ function App() {
             }
             return { ok: true, status: response.status };
         },
-        [resolveWorkerUrl, roomId],
+        [resolveWorkerUrl, roomId, useLocalStateSync],
     );
 
-    const fetchKvState = useCallback(
+    const fetchSharedState = useCallback(
         async (targetRoomId?: string, options?: { silent?: boolean; force?: boolean }) => {
-            const trimmedUrl = resolveWorkerUrl();
             const roomKey = targetRoomId ?? roomId;
-            if (!trimmedUrl || !roomKey) {
+            if (!roomKey) {
+                return null;
+            }
+            if (useLocalStateSync) {
+                if (!options?.silent) {
+                    setKvSyncStatus('Lade lokalen Status…');
+                }
+                const next = localStateStore[roomKey] ?? null;
+                if (!next) {
+                    const errorMessage = 'Kein lokaler Status gefunden.';
+                    setKvSyncError(errorMessage);
+                    if (!options?.silent) {
+                        setKvSyncStatus(errorMessage);
+                    }
+                    return null;
+                }
+                setLastSyncAt(new Date());
+                const currentVersion = storedStateRef.current.version;
+                if (options?.force || next.version > currentVersion) {
+                    applyStoredState(next);
+                }
+                setKvSyncError('');
+                if (!options?.silent) {
+                    setKvSyncStatus('Lokaler Status geladen');
+                }
+                return next;
+            }
+            const trimmedUrl = resolveWorkerUrl();
+            if (!trimmedUrl) {
                 return null;
             }
             const endpoint = `${normalizeWorkerUrl(trimmedUrl)}/kv/${encodeURIComponent(roomKey)}`;
@@ -684,14 +736,26 @@ function App() {
                 return null;
             }
         },
-        [applyStoredState, resolveWorkerUrl, roomId],
+        [applyStoredState, resolveWorkerUrl, roomId, useLocalStateSync],
     );
 
-    const fetchKvStateForJoin = useCallback(
+    const fetchSharedStateForJoin = useCallback(
         async (targetRoomId: string) => {
+            if (!targetRoomId) {
+                return { state: null, status: 0, message: 'Raum-ID fehlt.' };
+            }
+            if (useLocalStateSync) {
+                const existing = localStateStore[targetRoomId];
+                if (!existing) {
+                    return { state: null, status: 404, message: 'Lokaler Raum nicht gefunden.' };
+                }
+                applyStoredState(existing);
+                setLastSyncAt(new Date());
+                return { state: existing, status: 200, message: '' };
+            }
             const trimmedUrl = resolveWorkerUrl();
-            if (!trimmedUrl || !targetRoomId) {
-                return { state: null, status: 0, message: 'KV Worker URL oder Raum-ID fehlt.' };
+            if (!trimmedUrl) {
+                return { state: null, status: 0, message: 'KV Worker URL fehlt.' };
             }
             const endpoint = `${normalizeWorkerUrl(trimmedUrl)}/kv/${encodeURIComponent(targetRoomId)}`;
             try {
@@ -720,7 +784,7 @@ function App() {
                 return { state: null, status: 0, message };
             }
         },
-        [applyStoredState, resolveWorkerUrl],
+        [applyStoredState, resolveWorkerUrl, useLocalStateSync],
     );
 
     const updateSharedState = useCallback(
@@ -731,18 +795,18 @@ function App() {
             if (updated === current) return;
             const next = { ...updated, version: current.version + 1 };
             applyStoredState(next);
-            setKvSyncStatus('Speichere Änderungen…');
-            const result = await saveKvState(next, current.version);
+            setKvSyncStatus(useLocalStateSync ? 'Speichere lokal…' : 'Speichere Änderungen…');
+            const result = await saveSharedState(next, current.version);
             if (!result.ok) {
                 setKvSyncError(result.message);
                 setKvSyncStatus('Konflikt erkannt, lade neu…');
-                await fetchKvState(roomId, { silent: true, force: true });
+                await fetchSharedState(roomId, { silent: true, force: true });
                 return;
             }
             setKvSyncError('');
-            setKvSyncStatus('Gespeichert');
+            setKvSyncStatus(useLocalStateSync ? 'Lokal gespeichert' : 'Gespeichert');
         },
-        [applyStoredState, fetchKvState, roomId, saveKvState],
+        [applyStoredState, fetchSharedState, roomId, saveSharedState, useLocalStateSync],
     );
 
     const generateRoomId = () => {
@@ -755,7 +819,7 @@ function App() {
 
     const ensureRoomExists = useCallback(
         async (targetRoomId: string) => {
-            const existing = await fetchKvStateForJoin(targetRoomId);
+            const existing = await fetchSharedStateForJoin(targetRoomId);
             if (existing.state) {
                 return { ok: true, created: false };
             }
@@ -764,13 +828,13 @@ function App() {
             }
             const initialState = { ...initialStoredState };
             applyStoredState(initialState);
-            const saved = await saveKvState(initialState, 0, targetRoomId);
+            const saved = await saveSharedState(initialState, 0, targetRoomId);
             if (!saved.ok) {
                 return { ok: false, created: false, message: saved.message };
             }
             return { ok: true, created: true };
         },
-        [applyStoredState, fetchKvStateForJoin, saveKvState],
+        [applyStoredState, fetchSharedStateForJoin, saveSharedState],
     );
 
     const createRoomWithId = useCallback(
@@ -894,7 +958,7 @@ function App() {
     }, [scanOpened]);
 
     useEffect(() => {
-        if (!joined || !roomId) {
+        if (!joined || !roomId || useLocalStateSync) {
             setNextPollAt(null);
             return;
         }
@@ -904,11 +968,11 @@ function App() {
         };
         scheduleNextPoll();
         const intervalId = setInterval(() => {
-            fetchKvState(roomId, { silent: true });
+            fetchSharedState(roomId, { silent: true });
             scheduleNextPoll();
         }, intervalMs);
         return () => clearInterval(intervalId);
-    }, [fetchKvState, joined, pollIntervalSeconds, roomId]);
+    }, [fetchSharedState, joined, pollIntervalSeconds, roomId, useLocalStateSync]);
 
     useEffect(() => {
         if (!nextPollAt) {
@@ -1429,6 +1493,15 @@ function App() {
                     <Button onClick={() => handleJoin()}>Eigenen Link erstellen</Button>
                     <Text size="xs" c="dimmed">
                         {createRoomDebug}
+                    </Text>
+                    <Divider my="sm" label="Lokales Debugging" labelPosition="center" />
+                    <Checkbox
+                        label="Nur lokal speichern (keine KV Requests)"
+                        checked={useLocalStateSync}
+                        onChange={(event) => setUseLocalStateSync(event.currentTarget.checked)}
+                    />
+                    <Text size="xs" c="dimmed">
+                        Aktiviert lokale Synchronisation über ein In-Memory-Dictionary, ohne Netzwerkzugriffe.
                     </Text>
                     <Divider my="sm" label="Experimentell" labelPosition="center" />
                     <Group grow>
