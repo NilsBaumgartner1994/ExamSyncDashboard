@@ -137,7 +137,9 @@ export function NotesTile({
                         </Text>
                     )}
                     <Textarea
+                        autosize
                         minRows={6}
+                        maxRows={15}
                         ref={textareaRef}
                         value={isLockedByMe ? draft : text}
                         onChange={(event) => setDraft(event.currentTarget.value)}
