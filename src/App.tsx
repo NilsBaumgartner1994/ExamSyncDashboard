@@ -1,6 +1,5 @@
 // src/App.tsx
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import Peer from 'peerjs';
 import SimplePeer from 'simple-peer';
 import QRCode from 'qrcode';
 import pako from 'pako';
@@ -33,57 +32,66 @@ import { NotesTile } from './components/NotesTile';
 import { TileWrapper } from './components/TileWrapper';
 import { formatRoomIdForDisplay, normalizeRoomCode } from './utils/roomCode';
 
+type StoredState = {
+    version: number;
+    examEnd: string | null;
+    examWarningMinutes: number;
+    tiles: Record<string, unknown>;
+    toiletOccupants: string[];
+    toiletBlocked: boolean;
+    roomStatuses: RoomStatus[];
+    messages: ChatMessage[];
+    notesText: string;
+    notesLockedBy: string | null;
+    notesLockedByName: string | null;
+};
+
+const initialStoredState: StoredState = {
+    version: 0,
+    examEnd: null,
+    examWarningMinutes: 5,
+    tiles: {},
+    toiletOccupants: [],
+    toiletBlocked: false,
+    roomStatuses: [],
+    messages: [],
+    notesText: '',
+    notesLockedBy: null,
+    notesLockedByName: null,
+};
+
+const pollIntervalMs = 5000;
+
 function App() {
     const [nickname, setNickname] = useState('Anonym');
     const [roomIdInput, setRoomIdInput] = useState('');
     const [roomId, setRoomId] = useState('');
     const [joined, setJoined] = useState(false);
-    const [connecting, setConnecting] = useState(false);
-    const [connectionStatus, setConnectionStatus] = useState('');
+    const [joining, setJoining] = useState(false);
+    const [joinError, setJoinError] = useState('');
     const [toiletOccupants, setToiletOccupants] = useState<string[]>([]);
     const [toiletBlocked, setToiletBlocked] = useState(false);
     const [roomStatuses, setRoomStatuses] = useState<RoomStatus[]>([]);
     const [examEnd, setExamEnd] = useState<Date | null>(null);
     const [examWarningMinutes, setExamWarningMinutes] = useState(5);
-    const [tiles, setTiles] = useState<any>({});
+    const [tiles, setTiles] = useState<Record<string, unknown>>({});
     const [messages, setMessages] = useState<ChatMessage[]>([]);
-    const [connectedPeers, setConnectedPeers] = useState<string[]>([]);
     const [protocolEntries, setProtocolEntries] = useState<string[]>([]);
     const [notesText, setNotesText] = useState('');
     const [notesLockedBy, setNotesLockedBy] = useState<string | null>(null);
     const [notesLockedByName, setNotesLockedByName] = useState<string | null>(null);
-    const [isHost, setIsHost] = useState(false);
-    const [hostPeerId, setHostPeerId] = useState<string | null>(null);
-    const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const [scanOpened, setScanOpened] = useState(false);
     const [scanError, setScanError] = useState('');
     const [hiddenTiles, setHiddenTiles] = useState<Record<string, boolean>>({});
     const [createRoomDebug, setCreateRoomDebug] = useState('Debug: bereit.');
-    const [createRoomError, setCreateRoomError] = useState('');
-    const [lastConnectedHost, setLastConnectedHost] = useState<string | null>(null);
-    const [lastConnectedHosts, setLastConnectedHosts] = useState<string[]>([]);
-    const [lastHostStatus, setLastHostStatus] = useState<'idle' | 'checking' | 'reachable' | 'unreachable'>(
-        'idle',
-    );
-    const initialRoomParamRef = useRef<string | null>(null);
-    const createRoomTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    const recentHostsLimit = 5;
-    const [showDebugProtocol, setShowDebugProtocol] = useState(false);
-    const [lastHostsLoaded, setLastHostsLoaded] = useState(false);
-    const [lastHostsLogged, setLastHostsLogged] = useState(false);
-    const [p2pStatus, setP2pStatus] = useState('Bereit.');
-    const [p2pError, setP2pError] = useState('');
-    const [p2pLocalSignal, setP2pLocalSignal] = useState('');
-    const [p2pRemoteSignal, setP2pRemoteSignal] = useState('');
-    const [p2pQrCode, setP2pQrCode] = useState('');
-    const [p2pScanOpened, setP2pScanOpened] = useState(false);
-    const [p2pSignalCopied, setP2pSignalCopied] = useState(false);
-    const [p2pConnected, setP2pConnected] = useState(false);
-    const [p2pChatInput, setP2pChatInput] = useState('');
-    const [p2pChatMessages, setP2pChatMessages] = useState<
-        Array<{ id: string; user: string; text: string }>
-    >([]);
+    const [lastConnectedRoom, setLastConnectedRoom] = useState<string | null>(null);
+    const [lastConnectedRooms, setLastConnectedRooms] = useState<string[]>([]);
     const [authScreen, setAuthScreen] = useState<'join' | 'experimental' | 'kv'>('join');
+    const [stateVersion, setStateVersion] = useState(initialStoredState.version);
+    const [kvSyncStatus, setKvSyncStatus] = useState('');
+    const [kvSyncError, setKvSyncError] = useState('');
+    const [lastSyncAt, setLastSyncAt] = useState<Date | null>(null);
+    const [showDebugProtocol, setShowDebugProtocol] = useState(false);
     const defaultKvWorkerUrl = (() => {
         const envUrl = (import.meta.env.VITE_KV_WORKER_URL as string | undefined)?.trim();
         if (envUrl) return envUrl;
@@ -99,10 +107,28 @@ function App() {
     const [kvResponse, setKvResponse] = useState('');
     const [kvLoading, setKvLoading] = useState(false);
     const [p2pRole, setP2pRole] = useState<'host' | 'client' | null>(null);
+    const [p2pStatus, setP2pStatus] = useState('Bereit.');
+    const [p2pError, setP2pError] = useState('');
+    const [p2pLocalSignal, setP2pLocalSignal] = useState('');
+    const [p2pRemoteSignal, setP2pRemoteSignal] = useState('');
+    const [p2pQrCode, setP2pQrCode] = useState('');
+    const [p2pScanOpened, setP2pScanOpened] = useState(false);
+    const [p2pSignalCopied, setP2pSignalCopied] = useState(false);
+    const [p2pConnected, setP2pConnected] = useState(false);
+    const [p2pChatInput, setP2pChatInput] = useState('');
+    const [p2pChatMessages, setP2pChatMessages] = useState<
+        Array<{ id: string; user: string; text: string }>
+    >([]);
     const p2pPeerRef = useRef<SimplePeer.Instance | null>(null);
     const p2pCopyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const p2pReconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const p2pKeepAliveRef = useRef<NodeJS.Timeout | null>(null);
+    const storedStateRef = useRef<StoredState>(initialStoredState);
+    const clientIdRef = useRef(
+        typeof crypto !== 'undefined' && 'randomUUID' in crypto
+            ? crypto.randomUUID()
+            : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    );
 
     const tileDefinitions = [
         { key: 'link', label: 'Mein Raum-Link' },
@@ -114,40 +140,6 @@ function App() {
         { key: 'protocol', label: 'Protokoll' },
         { key: 'status', label: 'Verbindung' },
     ];
-
-    const peerRef = useRef<Peer | null>(null);
-    const connections = useRef<Record<string, Peer.DataConnection>>({});
-
-    const broadcast = (type: string, data: any) => {
-        const msg = JSON.stringify({ type, data });
-        Object.values(connections.current).forEach((conn) => {
-            if (conn.open) conn.send(msg);
-        });
-    };
-
-    const sendToHost = (type: string, data: any) => {
-        if (!hostPeerId) return;
-        const payload = JSON.stringify({ type, data });
-        const conn = connections.current[hostPeerId];
-        if (conn?.open) {
-            conn.send(payload);
-            addProtocolEntry('Debug', `Sende Host-Anfrage: ${type}`);
-            return;
-        }
-        addProtocolEntry('Debug', `Host-Verbindung nicht bereit für ${type}.`);
-        if (conn && !conn.open) {
-            delete connections.current[hostPeerId];
-        }
-        if (peerRef.current) {
-            const reconnect = peerRef.current.connect(hostPeerId);
-            connections.current[hostPeerId] = reconnect;
-            setupConnection(reconnect);
-            reconnect.once('open', () => {
-                reconnect.send(payload);
-                addProtocolEntry('Debug', `Sende Host-Anfrage nach Verbindungsaufbau: ${type}`);
-            });
-        }
-    };
 
     const addProtocolEntry = useCallback((card: string, message: string) => {
         const now = new Date();
@@ -191,6 +183,70 @@ function App() {
         setKvValue('');
         setKvStatus('');
         setKvResponse('');
+    };
+
+    const buildStoredState = useCallback(
+        () => ({
+            version: stateVersion,
+            examEnd: examEnd ? examEnd.toISOString() : null,
+            examWarningMinutes,
+            tiles,
+            toiletOccupants,
+            toiletBlocked,
+            roomStatuses,
+            messages,
+            notesText,
+            notesLockedBy,
+            notesLockedByName,
+        }),
+        [
+            stateVersion,
+            examEnd,
+            examWarningMinutes,
+            tiles,
+            toiletOccupants,
+            toiletBlocked,
+            roomStatuses,
+            messages,
+            notesText,
+            notesLockedBy,
+            notesLockedByName,
+        ],
+    );
+
+    useEffect(() => {
+        storedStateRef.current = buildStoredState();
+    }, [buildStoredState]);
+
+    const applyStoredState = useCallback((next: StoredState) => {
+        setStateVersion(next.version);
+        setExamEnd(next.examEnd ? new Date(next.examEnd) : null);
+        setExamWarningMinutes(next.examWarningMinutes ?? initialStoredState.examWarningMinutes);
+        setTiles(next.tiles ?? {});
+        setToiletOccupants(Array.isArray(next.toiletOccupants) ? next.toiletOccupants : []);
+        setToiletBlocked(Boolean(next.toiletBlocked));
+        setRoomStatuses(Array.isArray(next.roomStatuses) ? next.roomStatuses : []);
+        setMessages(Array.isArray(next.messages) ? next.messages : []);
+        setNotesText(next.notesText ?? '');
+        setNotesLockedBy(next.notesLockedBy ?? null);
+        setNotesLockedByName(next.notesLockedByName ?? null);
+    }, []);
+
+    const parseStoredState = (rawValue: unknown): StoredState | null => {
+        if (!rawValue) return null;
+        if (typeof rawValue === 'string') {
+            try {
+                const parsed = JSON.parse(rawValue) as StoredState;
+                return typeof parsed?.version === 'number' ? parsed : null;
+            } catch {
+                return null;
+            }
+        }
+        if (typeof rawValue === 'object') {
+            const parsed = rawValue as StoredState;
+            return typeof parsed?.version === 'number' ? parsed : null;
+        }
+        return null;
     };
 
     const performKvRequest = async (method: 'GET' | 'PUT' | 'DELETE', key?: string, value?: string) => {
@@ -261,33 +317,18 @@ function App() {
         }
     }, [kvWorkerUrl]);
 
-    const rememberLastHost = (peerId: string) => {
-        const normalized = normalizeRoomCode(peerId);
-        setLastConnectedHosts((prev) => {
-            const next = [normalized, ...prev.filter((id) => id !== normalized)].slice(0, recentHostsLimit);
-            localStorage.setItem('lastConnectedHosts', JSON.stringify(next));
+    const rememberLastRoom = (nextRoomId: string) => {
+        const normalized = normalizeRoomCode(nextRoomId);
+        setLastConnectedRooms((prev) => {
+            const next = [normalized, ...prev.filter((id) => id !== normalized)].slice(0, 5);
+            localStorage.setItem('lastConnectedRooms', JSON.stringify(next));
             const [mostRecent] = next;
             if (mostRecent) {
-                localStorage.setItem('lastConnectedHost', mostRecent);
+                localStorage.setItem('lastConnectedRoom', mostRecent);
             }
-            setLastConnectedHost(mostRecent ?? null);
+            setLastConnectedRoom(mostRecent ?? null);
             return next;
         });
-    };
-
-    const clearCreateRoomTimeout = () => {
-        if (createRoomTimeoutRef.current) {
-            clearTimeout(createRoomTimeoutRef.current);
-            createRoomTimeoutRef.current = null;
-        }
-    };
-
-    const connectToPeer = (peerId: string) => {
-        if (peerRef.current && !connections.current[peerId]) {
-            const conn = peerRef.current.connect(peerId);
-            connections.current[peerId] = conn;
-            setupConnection(conn);
-        }
     };
 
     const resetExperimentalState = () => {
@@ -522,224 +563,167 @@ function App() {
         }
     };
 
-    const sendNotesState = (conn?: Peer.DataConnection) => {
-        if (!isHost) return;
-        const payload = {
-            text: notesText,
-            lockedBy: notesLockedBy,
-            lockedByName: notesLockedByName,
-        };
-        if (conn) {
-            conn.send(JSON.stringify({ type: 'notes-state', data: payload }));
-        } else {
-            broadcast('notes-state', payload);
-        }
-    };
-
-    const broadcastRoomStatuses = (nextStatuses: RoomStatus[]) => {
-        if (!isHost) return;
-        broadcast('room-status', nextStatuses);
-        addProtocolEntry('Debug', `Status gesendet: room-status (${nextStatuses.length})`);
-    };
-
-    const applyRoomAdd = (name: string) => {
-        setRoomStatuses((prev) => {
-            if (prev.some((room) => room.name === name)) return prev;
-            const next = [...prev, { name, needsHelp: false, isResolved: false }];
-            broadcastRoomStatuses(next);
-            addProtocolEntry('Raum-Status', `Raum ${name} hinzugefügt`);
-            return next;
-        });
-    };
-
-    const applyRoomToggleHelp = (name: string) => {
-        setRoomStatuses((prev) => {
-            const target = prev.find((room) => room.name === name);
-            if (!target) return prev;
-            const nextNeedsHelp = !target.needsHelp;
-            const next = prev.map((room) =>
-                room.name === name
-                    ? { ...room, needsHelp: nextNeedsHelp, isResolved: false }
-                    : room,
-            );
-            broadcastRoomStatuses(next);
-            addProtocolEntry(
-                'Raum-Status',
-                `${name}: ${nextNeedsHelp ? 'Hilfe angefordert' : 'Hilfe zurückgenommen'}`,
-            );
-            return next;
-        });
-    };
-
-    const applyRoomClearHelp = (name: string) => {
-        setRoomStatuses((prev) => {
-            const target = prev.find((room) => room.name === name);
-            if (!target) return prev;
-            const next = prev.map((room) =>
-                room.name === name
-                    ? { ...room, needsHelp: false, isResolved: true }
-                    : room,
-            );
-            broadcastRoomStatuses(next);
-            addProtocolEntry('Raum-Status', `${name}: Hilfe erledigt`);
-            return next;
-        });
-    };
-
-    const applyRoomReset = (name: string) => {
-        setRoomStatuses((prev) => {
-            const target = prev.find((room) => room.name === name);
-            if (!target) return prev;
-            const next = prev.map((room) =>
-                room.name === name
-                    ? { ...room, needsHelp: false, isResolved: false }
-                    : room,
-            );
-            broadcastRoomStatuses(next);
-            addProtocolEntry('Raum-Status', `${name}: Status zurückgesetzt`);
-            return next;
-        });
-    };
-
-    const applyRoomRemove = (name: string) => {
-        setRoomStatuses((prev) => {
-            const target = prev.find((room) => room.name === name);
-            if (!target) return prev;
-            const next = prev.filter((room) => room.name !== name);
-            broadcastRoomStatuses(next);
-            addProtocolEntry('Raum-Status', `Raum ${name} entfernt`);
-            return next;
-        });
-    };
-
-    const handleNotesLock = (force = false) => {
-        const myId = peerRef.current?.id;
-        if (!myId) return;
-        const displayName = nickname.trim() || 'Anonym';
-        if (isHost) {
-            if (notesLockedBy && notesLockedBy !== myId && !force) return;
-            setNotesLockedBy(myId);
-            setNotesLockedByName(displayName);
-            sendNotesState();
-            return;
-        }
-        sendToHost('notes-lock-request', { force, name: displayName });
-    };
-
-    const handleNotesSave = (nextText: string) => {
-        const myId = peerRef.current?.id;
-        if (!myId) return;
-        const displayName = nickname.trim() || 'Anonym';
-        if (isHost) {
-            if (notesLockedBy !== myId) return;
-            setNotesText(nextText);
-            setNotesLockedBy(null);
-            setNotesLockedByName(null);
-            sendNotesState();
-            addProtocolEntry('Notizen', `Notizen gespeichert von ${displayName}`);
-            return;
-        }
-        sendToHost('notes-save-request', { text: nextText, name: displayName });
-    };
-
-    const handleJoin = (connectToCode?: string) => {
-        const normalizedCode = connectToCode ? normalizeRoomCode(connectToCode) : '';
-        const connectToId = normalizedCode || undefined;
-        if (connectToCode) {
-            setRoomIdInput(normalizedCode);
-        }
-        if (normalizedCode && !/^\d+$/.test(normalizedCode)) {
-            alert('Ungültige Raum-ID. Bitte nur Ziffern verwenden.');
-            return;
-        }
-        clearCreateRoomTimeout();
-        if (!connectToId) {
-            setCreateRoomDebug('Debug: Raum-Erstellung gestartet. Warte auf Peer-ID...');
-            setCreateRoomError('');
-            setIsHost(true);
-            setHostPeerId(null);
-        } else {
-            setIsHost(false);
-            setHostPeerId(connectToId);
-        }
-        const myPeerId = `${Date.now()}`;
-        const peer = new Peer(myPeerId);
-        peerRef.current = peer;
-
-        if (connectToId) {
-            setConnecting(true);
-            setConnectionStatus(
-                `Verbindung mit Raum-ID ${formatRoomIdForDisplay(normalizedCode)} wird aufgebaut...`,
-            );
-            connectionTimeoutRef.current = setTimeout(() => {
-                setConnecting(false);
-                setConnectionStatus('');
-                setRoomIdInput('');
-                alert('Der Peer ist offline oder antwortet nicht.');
-                peer.disconnect();
-                peer.destroy();
-                peerRef.current = null;
-            }, 10000);
-        } else {
-            createRoomTimeoutRef.current = setTimeout(() => {
-                setCreateRoomDebug('Debug: Raum-Erstellung dauert zu lange.');
-                setCreateRoomError('Timeout beim Erstellen des Raums.');
-                peer.disconnect();
-                peer.destroy();
-                peerRef.current = null;
-            }, 10000);
-        }
-
-        peer.on('open', (id) => {
-            setRoomId(id);
-            if (!connectToId) {
-                setJoined(true);
-                clearCreateRoomTimeout();
-                setCreateRoomDebug(
-                    `Debug: Raum erstellt (ID ${formatRoomIdForDisplay(id)}).`,
-                );
-                setHostPeerId(id);
-                window.history.replaceState({}, document.title, window.location.pathname);
-            } else if (connectToId !== id) {
-                connectToPeer(connectToId);
+    const saveKvState = useCallback(
+        async (nextState: StoredState, expectedVersion?: number) => {
+            const trimmedUrl = kvWorkerUrl.trim();
+            if (!trimmedUrl || !roomId) {
+                return { ok: false, status: 0, message: 'KV Worker URL oder Raum-ID fehlt.' };
             }
-        });
-        peer.on('error', (err) => {
-            if (!connectToId) {
-                const errorMessage =
-                    (err as { message?: string; type?: string }).message ??
-                    (err as { message?: string; type?: string }).type ??
-                    'Unbekannter Fehler';
-                clearCreateRoomTimeout();
-                setCreateRoomDebug('Debug: Raum-Erstellung fehlgeschlagen.');
-                setCreateRoomError(errorMessage);
-            }
-        });
-
-        peer.on('connection', (conn) => {
-            setupConnection(conn);
-            // Sobald sich jemand verbindet, senden wir die welcome-Nachricht
-            conn.on('open', () => {
-                conn.send(JSON.stringify({ type: 'welcome' }));
+            const endpoint = `${normalizeWorkerUrl(trimmedUrl)}/kv/${encodeURIComponent(roomId)}`;
+            const response = await fetch(endpoint, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ value: nextState, expectedVersion }),
             });
-        });
+            const payload = response.headers.get('content-type')?.includes('application/json')
+                ? await response.json().catch(() => null)
+                : null;
+            if (!response.ok) {
+                const message = payload?.error ?? `Speichern fehlgeschlagen (${response.status}).`;
+                return { ok: false, status: response.status, message };
+            }
+            return { ok: true, status: response.status };
+        },
+        [kvWorkerUrl, roomId],
+    );
+
+    const fetchKvState = useCallback(
+        async (targetRoomId?: string, options?: { silent?: boolean; force?: boolean }) => {
+            const trimmedUrl = kvWorkerUrl.trim();
+            const roomKey = targetRoomId ?? roomId;
+            if (!trimmedUrl || !roomKey) {
+                return null;
+            }
+            const endpoint = `${normalizeWorkerUrl(trimmedUrl)}/kv/${encodeURIComponent(roomKey)}`;
+            try {
+                if (!options?.silent) {
+                    setKvSyncStatus('Lade aktuellen Status…');
+                }
+                const response = await fetch(endpoint);
+                if (!response.ok) {
+                    const errorMessage = `Laden fehlgeschlagen (${response.status}).`;
+                    setKvSyncError(errorMessage);
+                    if (!options?.silent) {
+                        setKvSyncStatus(errorMessage);
+                    }
+                    return null;
+                }
+                const payload = await response.json();
+                const next = parseStoredState(payload?.value ?? payload?.stored ?? payload);
+                if (!next) {
+                    const errorMessage = 'Ungültige Daten im KV Store.';
+                    setKvSyncError(errorMessage);
+                    if (!options?.silent) {
+                        setKvSyncStatus(errorMessage);
+                    }
+                    return null;
+                }
+                const currentVersion = storedStateRef.current.version;
+                if (options?.force || next.version > currentVersion) {
+                    applyStoredState(next);
+                    setLastSyncAt(new Date());
+                }
+                setKvSyncError('');
+                if (!options?.silent) {
+                    setKvSyncStatus('Aktualisiert');
+                }
+                return next;
+            } catch (error) {
+                const message = error instanceof Error ? error.message : 'Unbekannter Fehler';
+                setKvSyncError(message);
+                if (!options?.silent) {
+                    setKvSyncStatus(`Laden fehlgeschlagen: ${message}`);
+                }
+                return null;
+            }
+        },
+        [applyStoredState, kvWorkerUrl, roomId],
+    );
+
+    const updateSharedState = useCallback(
+        async (updater: (prev: StoredState) => StoredState) => {
+            if (!roomId) return;
+            const current = storedStateRef.current;
+            const updated = updater(current);
+            if (updated === current) return;
+            const next = { ...updated, version: current.version + 1 };
+            applyStoredState(next);
+            setKvSyncStatus('Speichere Änderungen…');
+            const result = await saveKvState(next, current.version);
+            if (!result.ok) {
+                setKvSyncError(result.message);
+                setKvSyncStatus('Konflikt erkannt, lade neu…');
+                await fetchKvState(roomId, { silent: true, force: true });
+                return;
+            }
+            setKvSyncError('');
+            setKvSyncStatus('Gespeichert');
+        },
+        [applyStoredState, fetchKvState, roomId, saveKvState],
+    );
+
+    const generateRoomId = () => {
+        const bytes = new Uint32Array(1);
+        crypto.getRandomValues(bytes);
+        return String(bytes[0] % 100000000).padStart(8, '0');
     };
+
+    const handleJoin = useCallback(
+        async (connectToCode?: string) => {
+            const normalizedCode = connectToCode ? normalizeRoomCode(connectToCode) : '';
+            if (connectToCode) {
+                setRoomIdInput(normalizedCode);
+            }
+            if (connectToCode && !normalizedCode) {
+                setJoinError('Ungültige Raum-ID.');
+                return;
+            }
+            setJoining(true);
+            setJoinError('');
+            setKvSyncError('');
+            setKvSyncStatus('');
+            const nextRoomId = normalizedCode || generateRoomId();
+            setRoomId(nextRoomId);
+            setKvKey(nextRoomId);
+            if (!normalizedCode) {
+                const initialState = { ...initialStoredState };
+                applyStoredState(initialState);
+                const result = await saveKvState(initialState, 0);
+                if (!result.ok) {
+                    setJoinError(result.message);
+                    setJoining(false);
+                    return;
+                }
+                setCreateRoomDebug(`Debug: Raum erstellt (ID ${formatRoomIdForDisplay(nextRoomId)}).`);
+            } else {
+                const loaded = await fetchKvState(nextRoomId, { silent: true, force: true });
+                if (!loaded) {
+                    setJoinError('Raum konnte nicht geladen werden.');
+                    setJoining(false);
+                    return;
+                }
+                setCreateRoomDebug(`Debug: Raum geladen (ID ${formatRoomIdForDisplay(nextRoomId)}).`);
+            }
+            setJoined(true);
+            setJoining(false);
+            rememberLastRoom(nextRoomId);
+            window.history.replaceState({}, document.title, window.location.pathname);
+        },
+        [applyStoredState, fetchKvState, saveKvState],
+    );
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         const roomParam = params.get('roomId') ?? params.get('peerId');
         if (roomParam) {
             const normalized = normalizeRoomCode(roomParam);
-            initialRoomParamRef.current = normalized;
             setRoomIdInput(normalized);
             handleJoin(normalized);
-            return;
         }
-        initialRoomParamRef.current = null;
-    }, []);
+    }, [handleJoin]);
 
     useEffect(() => {
-        const storedList = localStorage.getItem('lastConnectedHosts');
+        const storedList = localStorage.getItem('lastConnectedRooms');
         const normalizeList = (list: Array<string | null | undefined>) =>
             Array.from(
                 new Set(list.map((item) => normalizeRoomCode(String(item ?? ''))).filter(Boolean)),
@@ -758,31 +742,17 @@ function App() {
         }
 
         if (normalized.length === 0) {
-            const stored = localStorage.getItem('lastConnectedHost');
+            const stored = localStorage.getItem('lastConnectedRoom');
             if (stored) {
                 normalized = normalizeList([stored]);
             }
         }
 
         if (normalized.length > 0) {
-            setLastConnectedHosts(normalized);
-            setLastConnectedHost(normalized[0] ?? null);
+            setLastConnectedRooms(normalized);
+            setLastConnectedRoom(normalized[0] ?? null);
         }
-        setLastHostsLoaded(true);
     }, []);
-
-    useEffect(() => {
-        if (!joined || !lastHostsLoaded || lastHostsLogged) return;
-        setLastHostsLogged(true);
-        if (lastConnectedHosts.length > 0) {
-            addProtocolEntry(
-                'Login',
-                `Zuletzt beigetretene Räume (lokaler Speicher): ${lastConnectedHosts.join(', ')}`,
-            );
-            return;
-        }
-        addProtocolEntry('Login', 'Keine zuletzt beigetretenen Räume im lokalen Speicher gefunden.');
-    }, [addProtocolEntry, joined, lastConnectedHosts, lastHostsLoaded, lastHostsLogged]);
 
     useEffect(() => {
         if (scanOpened) {
@@ -791,57 +761,12 @@ function App() {
     }, [scanOpened]);
 
     useEffect(() => {
-        if (!lastConnectedHost) {
-            setLastHostStatus('idle');
-            return;
-        }
-        let cancelled = false;
-        setLastHostStatus('checking');
-        const probePeer = new Peer(`${Date.now()}-${Math.random().toString(16).slice(2)}`);
-        const cleanup = () => {
-            probePeer.disconnect();
-            probePeer.destroy();
-        };
-        const timeoutId = setTimeout(() => {
-            if (!cancelled) {
-                setLastHostStatus('unreachable');
-            }
-            cleanup();
-        }, 5000);
-
-        probePeer.on('open', () => {
-            const conn = probePeer.connect(lastConnectedHost);
-            conn.on('open', () => {
-                if (!cancelled) {
-                    setLastHostStatus('reachable');
-                }
-                clearTimeout(timeoutId);
-                conn.close();
-                cleanup();
-            });
-            conn.on('error', () => {
-                if (!cancelled) {
-                    setLastHostStatus('unreachable');
-                }
-                clearTimeout(timeoutId);
-                cleanup();
-            });
-        });
-
-        probePeer.on('error', () => {
-            if (!cancelled) {
-                setLastHostStatus('unreachable');
-            }
-            clearTimeout(timeoutId);
-            cleanup();
-        });
-
-        return () => {
-            cancelled = true;
-            clearTimeout(timeoutId);
-            cleanup();
-        };
-    }, [lastConnectedHost]);
+        if (!joined || !roomId) return;
+        const intervalId = setInterval(() => {
+            fetchKvState(roomId, { silent: true });
+        }, pollIntervalMs);
+        return () => clearInterval(intervalId);
+    }, [fetchKvState, joined, roomId]);
 
     const handleScan = (detectedCodes: Array<{ rawValue: string }>) => {
         if (!detectedCodes.length) return;
@@ -855,190 +780,58 @@ function App() {
         setScanError('QR-Code enthält keine Raum-ID.');
     };
 
-    const setupConnection = (conn: Peer.DataConnection) => {
-        conn.on('open', () => {
-            if (!connections.current[conn.peer]) {
-                connections.current[conn.peer] = conn;
+    const handleNotesLock = (force = false) => {
+        const displayName = nickname.trim() || 'Anonym';
+        updateSharedState((prev) => {
+            if (prev.notesLockedBy && prev.notesLockedBy !== clientIdRef.current && !force) {
+                return prev;
             }
-            setConnectedPeers(Object.keys(connections.current));
-            if (isHost) {
-                addProtocolEntry('Verbindung', `Teilnehmer ${conn.peer} beigetreten`);
-            }
-            if (!isHost && hostPeerId && conn.peer === hostPeerId) {
-                rememberLastHost(hostPeerId);
-            }
-            if (isHost) {
-                broadcast('examEnd', examEnd);
-                broadcast('examWarningMinutes', examWarningMinutes);
-                broadcast('tiles', tiles);
-                conn.send(JSON.stringify({ type: 'toilet-blocked', data: toiletBlocked }));
-                conn.send(JSON.stringify({ type: 'toilet-occupants', data: toiletOccupants }));
-                conn.send(JSON.stringify({ type: 'room-status', data: roomStatuses }));
-                sendNotesState(conn);
-            } else if (hostPeerId && conn.peer === hostPeerId) {
-                conn.send(JSON.stringify({ type: 'room-status-request' }));
-            }
-        });
-
-        conn.on('data', (data) => {
-            try {
-                const msg = JSON.parse(data);
-                const isAuthoritative =
-                    isHost || (hostPeerId && conn.peer === hostPeerId);
-                if (!isAuthoritative) {
-                    return;
-                }
-                if (msg.type === 'examEnd') setExamEnd(new Date(msg.data));
-                if (msg.type === 'examWarningMinutes') setExamWarningMinutes(Number(msg.data));
-                if (msg.type === 'tiles') setTiles(msg.data);
-                if (msg.type === 'toilet-blocked') setToiletBlocked(Boolean(msg.data));
-                if (msg.type === 'toilet-occupants') {
-                    setToiletOccupants(Array.isArray(msg.data) ? msg.data : []);
-                }
-                if (msg.type === 'chat') {
-                    setMessages((prev) => [...prev, msg.data]);
-                    addProtocolEntry('Chat', `von ${msg.data.user}: ${msg.data.text}`);
-                }
-                if (msg.type === 'notes-state') {
-                    setNotesText(msg.data.text ?? '');
-                    setNotesLockedBy(msg.data.lockedBy ?? null);
-                    setNotesLockedByName(msg.data.lockedByName ?? null);
-                }
-                if (msg.type === 'room-status') {
-                    setRoomStatuses(Array.isArray(msg.data) ? msg.data : []);
-                }
-                if (msg.type === 'room-status-request' && isHost) {
-                    conn.send(JSON.stringify({ type: 'room-status', data: roomStatuses }));
-                }
-                if (msg.type === 'room-status-add-request' && isHost) {
-                    const name = String(msg.data ?? '');
-                    if (!name) return;
-                    applyRoomAdd(name);
-                }
-                if (msg.type === 'room-status-toggle-help-request' && isHost) {
-                    const name = String(msg.data ?? '');
-                    if (!name) return;
-                    applyRoomToggleHelp(name);
-                }
-                if (msg.type === 'room-status-clear-help-request' && isHost) {
-                    const name = String(msg.data ?? '');
-                    if (!name) return;
-                    applyRoomClearHelp(name);
-                }
-                if (msg.type === 'room-status-reset-request' && isHost) {
-                    const name = String(msg.data ?? '');
-                    if (!name) return;
-                    applyRoomReset(name);
-                }
-                if (msg.type === 'room-status-remove-request' && isHost) {
-                    const name = String(msg.data ?? '');
-                    if (!name) return;
-                    applyRoomRemove(name);
-                }
-                if (msg.type === 'toilet-blocked-request' && isHost) {
-                    const next = Boolean(msg.data);
-                    setToiletBlocked(next);
-                    broadcast('toilet-blocked', next);
-                    addProtocolEntry('Debug', `Status gesendet: toilet-blocked (${next ? 'gesperrt' : 'frei'})`);
-                }
-                if (msg.type === 'toilet-occupy-request' && isHost) {
-                    const name = String(msg.data ?? '');
-                    if (!name) return;
-                    setToiletOccupants((prev) => {
-                        if (prev.includes(name)) return prev;
-                        const next = [...prev, name];
-                        broadcast('toilet-occupants', next);
-                        addProtocolEntry('Debug', `Status gesendet: toilet-occupants (+${name})`);
-                        return next;
-                    });
-                    addProtocolEntry('Toilette', `besetzt (${name})`);
-                }
-                if (msg.type === 'toilet-release-request' && isHost) {
-                    const name = String(msg.data ?? '');
-                    if (!name) return;
-                    setToiletOccupants((prev) => {
-                        const index = prev.indexOf(name);
-                        if (index === -1) return prev;
-                        const next = [...prev];
-                        next.splice(index, 1);
-                        broadcast('toilet-occupants', next);
-                        addProtocolEntry('Debug', `Status gesendet: toilet-occupants (-${name})`);
-                        return next;
-                    });
-                    addProtocolEntry('Toilette', `frei (${name} zurück)`);
-                }
-                if (msg.type === 'chat-request' && isHost) {
-                    setMessages((prev) => [...prev, msg.data]);
-                    addProtocolEntry('Chat', `von ${msg.data.user}: ${msg.data.text}`);
-                    broadcast('chat', msg.data);
-                }
-                if (msg.type === 'exam-end-request' && isHost) {
-                    const next = new Date(msg.data);
-                    setExamEnd(next);
-                    broadcast('examEnd', next);
-                }
-                if (msg.type === 'exam-warning-request' && isHost) {
-                    const next = Number(msg.data);
-                    setExamWarningMinutes(next);
-                    broadcast('examWarningMinutes', next);
-                }
-                if (msg.type === 'notes-lock-request' && isHost) {
-                    const requestedName = String(msg.data?.name ?? 'Anonym');
-                    const force = Boolean(msg.data?.force);
-                    if (notesLockedBy && notesLockedBy !== conn.peer && !force) return;
-                    setNotesLockedBy(conn.peer);
-                    setNotesLockedByName(requestedName);
-                    sendNotesState();
-                }
-                if (msg.type === 'notes-save-request' && isHost) {
-                    if (notesLockedBy !== conn.peer) return;
-                    const nextText = String(msg.data?.text ?? '');
-                    const requestedName = String(msg.data?.name ?? 'Anonym');
-                    setNotesText(nextText);
-                    setNotesLockedBy(null);
-                    setNotesLockedByName(null);
-                    sendNotesState();
-                    addProtocolEntry('Notizen', `Notizen gespeichert von ${requestedName}`);
-                }
-
-                if (msg.type === 'welcome') {
-                    clearTimeout(connectionTimeoutRef.current!);
-                    setConnecting(false);
-                    setJoined(true);
-                    window.history.replaceState({}, document.title, window.location.pathname);
-                }
-            } catch (e) {
-                console.warn('Fehler beim Parsen:', e);
-            }
-        });
-
-        conn.on('close', () => {
-            delete connections.current[conn.peer];
-            setConnectedPeers(Object.keys(connections.current));
+            return {
+                ...prev,
+                notesLockedBy: clientIdRef.current,
+                notesLockedByName: displayName,
+            };
         });
     };
 
-    if (connecting) {
+    const handleNotesSave = (nextText: string) => {
+        const displayName = nickname.trim() || 'Anonym';
+        updateSharedState((prev) => {
+            if (prev.notesLockedBy !== clientIdRef.current) {
+                return prev;
+            }
+            addProtocolEntry('Notizen', `Notizen gespeichert von ${displayName}`);
+            return {
+                ...prev,
+                notesText: nextText,
+                notesLockedBy: null,
+                notesLockedByName: null,
+            };
+        });
+    };
+
+    if (joining) {
         return (
             <Container size="xs" mt="xl">
                 <Center>
                     <Stack align="center">
                         <Loader size="xl" />
-                        <Text>{connectionStatus}</Text>
+                        <Text>Raum wird geladen…</Text>
+                        {joinError && (
+                            <Text size="sm" c="red">
+                                {joinError}
+                            </Text>
+                        )}
                         <Button
                             variant="light"
                             color="red"
                             onClick={() => {
-                                clearTimeout(connectionTimeoutRef.current!);
-                                setConnecting(false);
-                                setConnectionStatus('');
+                                setJoining(false);
+                                setJoinError('');
                                 setRoomIdInput('');
-                                peerRef.current?.disconnect();
-                                peerRef.current?.destroy();
-                                peerRef.current = null;
                             }}
                         >
-                            Verbindung abbrechen
+                            Abbrechen
                         </Button>
                     </Stack>
                 </Center>
@@ -1428,8 +1221,6 @@ function App() {
                     <TextInput
                         placeholder="Raum-Code eingeben"
                         value={roomIdInput}
-                        inputMode="numeric"
-                        pattern="[0-9]*"
                         onChange={(e) => setRoomIdInput(normalizeRoomCode(e.currentTarget.value))}
                     />
                     <Group grow>
@@ -1438,45 +1229,34 @@ function App() {
                             QR-Code scannen
                         </Button>
                     </Group>
+                    {joinError && (
+                        <Text size="sm" c="red">
+                            {joinError}
+                        </Text>
+                    )}
                     <Divider my="sm" label="Zuletzt verbunden mit" labelPosition="center" />
-                    {lastConnectedHost ? (
+                    {lastConnectedRoom ? (
                         <Stack gap="xs">
-                            <Button variant="outline" onClick={() => handleJoin(lastConnectedHost)}>
-                                {formatRoomIdForDisplay(lastConnectedHost)}
+                            <Button variant="outline" onClick={() => handleJoin(lastConnectedRoom)}>
+                                {formatRoomIdForDisplay(lastConnectedRoom)}
                             </Button>
-                            <Text
-                                size="sm"
-                                c={
-                                    lastHostStatus === 'reachable'
-                                        ? 'green'
-                                        : lastHostStatus === 'unreachable'
-                                          ? 'red'
-                                          : 'dimmed'
-                                }
-                            >
-                                {lastHostStatus === 'checking'
-                                    ? 'Erreichbarkeit des letzten Raums wird geprüft...'
-                                    : lastHostStatus === 'reachable'
-                                      ? 'Letzter Raum erreichbar'
-                                      : 'Letzter Raum antwortet nicht'}
-                            </Text>
                         </Stack>
                     ) : (
                         <Text size="sm" c="dimmed">
                             Kein zuletzt verbundener Raum gespeichert.
                         </Text>
                     )}
-                    {lastConnectedHosts.length > 0 && (
+                    {lastConnectedRooms.length > 0 && (
                         <>
                             <Divider my="sm" label="Zuletzt beigetretene Räume" labelPosition="center" />
                             <Group gap="xs" wrap="wrap">
-                                {lastConnectedHosts.map((hostId) => (
+                                {lastConnectedRooms.map((room) => (
                                     <Button
-                                        key={hostId}
-                                        variant={hostId === lastConnectedHost ? 'outline' : 'light'}
-                                        onClick={() => handleJoin(hostId)}
+                                        key={room}
+                                        variant={room === lastConnectedRoom ? 'outline' : 'light'}
+                                        onClick={() => handleJoin(room)}
                                     >
-                                        {formatRoomIdForDisplay(hostId)}
+                                        {formatRoomIdForDisplay(room)}
                                     </Button>
                                 ))}
                             </Group>
@@ -1484,9 +1264,8 @@ function App() {
                     )}
                     <Divider my="sm" label="Oder neuen Link erstellen" labelPosition="center" />
                     <Button onClick={() => handleJoin()}>Eigenen Link erstellen</Button>
-                    <Text size="xs" c={createRoomError ? 'red' : 'dimmed'}>
+                    <Text size="xs" c="dimmed">
                         {createRoomDebug}
-                        {createRoomError ? ` Fehler: ${createRoomError}` : ''}
                     </Text>
                     <Divider my="sm" label="Experimentell" labelPosition="center" />
                     <Group grow>
@@ -1578,45 +1357,42 @@ function App() {
                         occupants={toiletOccupants}
                         isBlocked={toiletBlocked}
                         onToggleBlocked={(next) => {
-                            if (isHost) {
-                                setToiletBlocked(next);
-                                broadcast('toilet-blocked', next);
-                                addProtocolEntry(
-                                    'Debug',
-                                    `Status gesendet: toilet-blocked (${next ? 'gesperrt' : 'frei'})`,
-                                );
-                            } else {
-                                sendToHost('toilet-blocked-request', next);
-                            }
+                            updateSharedState((prev) => ({
+                                ...prev,
+                                toiletBlocked: next,
+                            }));
+                            addProtocolEntry(
+                                'Debug',
+                                `Status gesendet: toilet-blocked (${next ? 'gesperrt' : 'frei'})`,
+                            );
                         }}
                         onOccupy={(name) => {
-                            if (isHost) {
-                                setToiletOccupants((prev) => {
-                                    const next = [...prev, name];
-                                    broadcast('toilet-occupants', next);
-                                    addProtocolEntry('Debug', `Status gesendet: toilet-occupants (+${name})`);
-                                    return next;
-                                });
+                            updateSharedState((prev) => {
+                                if (prev.toiletOccupants.includes(name)) {
+                                    return prev;
+                                }
+                                const next = [...prev.toiletOccupants, name];
                                 addProtocolEntry('Toilette', `besetzt (${name})`);
-                            } else {
-                                sendToHost('toilet-occupy-request', name);
-                            }
+                                addProtocolEntry('Debug', `Status gesendet: toilet-occupants (+${name})`);
+                                return {
+                                    ...prev,
+                                    toiletOccupants: next,
+                                };
+                            });
                         }}
                         onRelease={(name) => {
-                            if (isHost) {
-                                setToiletOccupants((prev) => {
-                                    const index = prev.indexOf(name);
-                                    if (index === -1) return prev;
-                                    const next = [...prev];
-                                    next.splice(index, 1);
-                                    broadcast('toilet-occupants', next);
-                                    addProtocolEntry('Debug', `Status gesendet: toilet-occupants (-${name})`);
-                                    return next;
-                                });
+                            updateSharedState((prev) => {
+                                const index = prev.toiletOccupants.indexOf(name);
+                                if (index === -1) return prev;
+                                const next = [...prev.toiletOccupants];
+                                next.splice(index, 1);
                                 addProtocolEntry('Toilette', `frei (${name} zurück)`);
-                            } else {
-                                sendToHost('toilet-release-request', name);
-                            }
+                                addProtocolEntry('Debug', `Status gesendet: toilet-occupants (-${name})`);
+                                return {
+                                    ...prev,
+                                    toiletOccupants: next,
+                                };
+                            });
                         }}
                         onClose={() => hideTile('toilet')}
                     />
@@ -1626,39 +1402,66 @@ function App() {
                         title="Raum-Status"
                         rooms={roomStatuses}
                         onAddRoom={(name) => {
-                            if (isHost) {
-                                applyRoomAdd(name);
-                            } else {
-                                sendToHost('room-status-add-request', name);
-                            }
+                            updateSharedState((prev) => {
+                                if (prev.roomStatuses.some((room) => room.name === name)) {
+                                    return prev;
+                                }
+                                const next = [...prev.roomStatuses, { name, needsHelp: false, isResolved: false }];
+                                addProtocolEntry('Raum-Status', `Raum ${name} hinzugefügt`);
+                                return { ...prev, roomStatuses: next };
+                            });
                         }}
                         onToggleHelp={(name) => {
-                            if (isHost) {
-                                applyRoomToggleHelp(name);
-                            } else {
-                                sendToHost('room-status-toggle-help-request', name);
-                            }
+                            updateSharedState((prev) => {
+                                const target = prev.roomStatuses.find((room) => room.name === name);
+                                if (!target) return prev;
+                                const nextNeedsHelp = !target.needsHelp;
+                                const next = prev.roomStatuses.map((room) =>
+                                    room.name === name
+                                        ? { ...room, needsHelp: nextNeedsHelp, isResolved: false }
+                                        : room,
+                                );
+                                addProtocolEntry(
+                                    'Raum-Status',
+                                    `${name}: ${nextNeedsHelp ? 'Hilfe angefordert' : 'Hilfe zurückgenommen'}`,
+                                );
+                                return { ...prev, roomStatuses: next };
+                            });
                         }}
                         onClearHelp={(name) => {
-                            if (isHost) {
-                                applyRoomClearHelp(name);
-                            } else {
-                                sendToHost('room-status-clear-help-request', name);
-                            }
+                            updateSharedState((prev) => {
+                                const target = prev.roomStatuses.find((room) => room.name === name);
+                                if (!target) return prev;
+                                const next = prev.roomStatuses.map((room) =>
+                                    room.name === name
+                                        ? { ...room, needsHelp: false, isResolved: true }
+                                        : room,
+                                );
+                                addProtocolEntry('Raum-Status', `${name}: Hilfe erledigt`);
+                                return { ...prev, roomStatuses: next };
+                            });
                         }}
                         onResetStatus={(name) => {
-                            if (isHost) {
-                                applyRoomReset(name);
-                            } else {
-                                sendToHost('room-status-reset-request', name);
-                            }
+                            updateSharedState((prev) => {
+                                const target = prev.roomStatuses.find((room) => room.name === name);
+                                if (!target) return prev;
+                                const next = prev.roomStatuses.map((room) =>
+                                    room.name === name
+                                        ? { ...room, needsHelp: false, isResolved: false }
+                                        : room,
+                                );
+                                addProtocolEntry('Raum-Status', `${name}: Status zurückgesetzt`);
+                                return { ...prev, roomStatuses: next };
+                            });
                         }}
                         onRemoveRoom={(name) => {
-                            if (isHost) {
-                                applyRoomRemove(name);
-                            } else {
-                                sendToHost('room-status-remove-request', name);
-                            }
+                            updateSharedState((prev) => {
+                                const target = prev.roomStatuses.find((room) => room.name === name);
+                                if (!target) return prev;
+                                const next = prev.roomStatuses.filter((room) => room.name !== name);
+                                addProtocolEntry('Raum-Status', `Raum ${name} entfernt`);
+                                return { ...prev, roomStatuses: next };
+                            });
                         }}
                         onClose={() => hideTile('room-status')}
                     />
@@ -1669,21 +1472,17 @@ function App() {
                         endTime={examEnd}
                         onSetMinutes={(min) => {
                             const end = new Date(Date.now() + min * 60000);
-                            if (isHost) {
-                                setExamEnd(end);
-                                broadcast('examEnd', end);
-                            } else {
-                                sendToHost('exam-end-request', end.toISOString());
-                            }
+                            updateSharedState((prev) => ({
+                                ...prev,
+                                examEnd: end.toISOString(),
+                            }));
                         }}
                         warningMinutes={examWarningMinutes}
                         onSetWarningMinutes={(min) => {
-                            if (isHost) {
-                                setExamWarningMinutes(min);
-                                broadcast('examWarningMinutes', min);
-                            } else {
-                                sendToHost('exam-warning-request', min);
-                            }
+                            updateSharedState((prev) => ({
+                                ...prev,
+                                examWarningMinutes: min,
+                            }));
                         }}
                         onClose={() => hideTile('timer')}
                     />
@@ -1693,13 +1492,11 @@ function App() {
                         title="Dozenten-Chat"
                         messages={messages}
                         onSend={(msg) => {
-                            if (isHost) {
-                                setMessages((prev) => [...prev, msg]);
-                                addProtocolEntry('Chat', `von ${msg.user}: ${msg.text}`);
-                                broadcast('chat', msg);
-                            } else {
-                                sendToHost('chat-request', msg);
-                            }
+                            updateSharedState((prev) => ({
+                                ...prev,
+                                messages: [...prev.messages, msg],
+                            }));
+                            addProtocolEntry('Chat', `von ${msg.user}: ${msg.text}`);
                         }}
                         nickname={nickname}
                         onNicknameChange={setNickname}
@@ -1712,7 +1509,7 @@ function App() {
                         text={notesText}
                         lockedBy={notesLockedBy}
                         lockedByName={notesLockedByName}
-                        myPeerId={peerRef.current?.id}
+                        myPeerId={clientIdRef.current}
                         onRequestLock={() => handleNotesLock(false)}
                         onForceLock={() => handleNotesLock(true)}
                         onSave={handleNotesSave}
@@ -1732,8 +1529,10 @@ function App() {
                 {!hiddenTiles.status && (
                     <StatusTile
                         title="Verbindung"
-                        peerId={peerRef.current?.id}
-                        connectedPeers={connectedPeers}
+                        roomId={roomId}
+                        version={stateVersion}
+                        kvStatus={kvSyncError || kvSyncStatus}
+                        lastSyncAt={lastSyncAt}
                         onClose={() => hideTile('status')}
                     />
                 )}
