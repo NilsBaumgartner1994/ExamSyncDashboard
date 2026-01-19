@@ -806,26 +806,73 @@ function App() {
         [applyStoredState, resolveWorkerUrl, useLocalStateSync],
     );
 
+    const isStateValueEqual = useCallback((left: unknown, right: unknown) => {
+        if (left === right) return true;
+        if (typeof left !== 'object' || typeof right !== 'object' || !left || !right) {
+            return false;
+        }
+        try {
+            return JSON.stringify(left) === JSON.stringify(right);
+        } catch (error) {
+            return false;
+        }
+    }, []);
+
+    const getChangedFields = useCallback(
+        (base: StoredState, updated: StoredState) => {
+            return (Object.keys(base) as Array<keyof StoredState>)
+                .filter((key) => key !== 'version')
+                .filter((key) => !isStateValueEqual(base[key], updated[key]))
+                .map((key) => [key, updated[key]] as const);
+        },
+        [isStateValueEqual],
+    );
+
     const updateSharedState = useCallback(
         async (updater: (prev: StoredState) => StoredState) => {
             if (!roomId) return;
             const current = storedStateRef.current;
             const updated = updater(current);
             if (updated === current) return;
+            const changedFields = getChangedFields(current, updated);
+            if (changedFields.length === 0) return;
             const next = { ...updated, version: current.version + 1 };
             applyStoredState(next);
             setKvSyncStatus(useLocalStateSync ? 'Speichere lokal…' : 'Speichere Änderungen…');
             const result = await saveSharedState(next, current.version);
             if (!result.ok) {
+                if (result.status !== 409) {
+                    setKvSyncError(result.message);
+                    setKvSyncStatus('Speichern fehlgeschlagen.');
+                    return;
+                }
                 setKvSyncError(result.message);
-                setKvSyncStatus('Konflikt erkannt, lade neu…');
-                await fetchSharedState(roomId, { silent: true, force: true });
-                return;
+                setKvSyncStatus('Konflikt erkannt, prüfe Änderungen…');
+                const latest = await fetchSharedState(roomId, { silent: true, force: true });
+                if (!latest) {
+                    setKvSyncStatus('Konflikt erkannt, lade neu…');
+                    return;
+                }
+                const hasFieldConflict = changedFields.some(([key]) => !isStateValueEqual(current[key], latest[key]));
+                if (hasFieldConflict) {
+                    setKvSyncStatus('Konflikt erkannt, lade neu…');
+                    return;
+                }
+                const mergedUpdates = Object.fromEntries(changedFields) as Partial<StoredState>;
+                const merged = { ...latest, ...mergedUpdates, version: latest.version + 1 };
+                applyStoredState(merged);
+                setKvSyncStatus('Konfliktfrei, speichere zusammengeführt…');
+                const retry = await saveSharedState(merged, latest.version);
+                if (!retry.ok) {
+                    setKvSyncError(retry.message);
+                    setKvSyncStatus('Speichern nach Konflikt fehlgeschlagen.');
+                    return;
+                }
             }
             setKvSyncError('');
             setKvSyncStatus(useLocalStateSync ? 'Lokal gespeichert' : 'Gespeichert');
         },
-        [applyStoredState, fetchSharedState, roomId, saveSharedState, useLocalStateSync],
+        [applyStoredState, fetchSharedState, getChangedFields, isStateValueEqual, roomId, saveSharedState, useLocalStateSync],
     );
 
     const generateRoomId = () => {
