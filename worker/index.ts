@@ -42,8 +42,14 @@ export default {
             }
 
             if (path === '/kv' && request.method === 'GET') {
-                const list = await env.EXAM_SYNC_KV.list();
-                return jsonResponse({ keys: list.keys.map((key) => key.name) });
+                const keys: string[] = [];
+                let cursor: string | undefined;
+                do {
+                    const list = await env.EXAM_SYNC_KV.list({ cursor });
+                    keys.push(...list.keys.map((key) => key.name));
+                    cursor = list.list_complete ? undefined : list.cursor;
+                } while (cursor);
+                return jsonResponse({ keys });
             }
 
             if (!path.startsWith('/kv/')) {
