@@ -90,7 +90,7 @@ function App() {
         if (typeof window !== 'undefined' && window.location.hostname.endsWith('.workers.dev')) {
             return window.location.origin;
         }
-        return '';
+        return 'https://exam-sync-dashboard.nilsbaumgartner1994.workers.dev';
     })();
     const [kvWorkerUrl, setKvWorkerUrl] = useState(() => localStorage.getItem('kvWorkerUrl') ?? defaultKvWorkerUrl);
     const [kvKey, setKvKey] = useState('');
@@ -213,6 +213,7 @@ function App() {
             const endpoint = key
                 ? `${baseUrl}/kv/${encodeURIComponent(key)}`
                 : `${baseUrl}/kv`;
+            console.debug('[KV]', 'Request', { method, endpoint, key, hasValue: Boolean(value) });
             const options: RequestInit = {
                 method,
                 headers: {
@@ -227,10 +228,23 @@ function App() {
             const body = contentType.includes('application/json')
                 ? JSON.stringify(await response.json(), null, 2)
                 : await response.text();
+            console.debug('[KV]', 'Response', {
+                method,
+                endpoint,
+                status: response.status,
+                ok: response.ok,
+                contentType,
+            });
             setKvStatus(response.ok ? 'OK' : `Fehler (${response.status})`);
             setKvResponse(body || (response.ok ? 'Keine Antwort.' : 'Leere Antwort vom Worker.'));
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Unbekannter Fehler';
+            console.error('[KV]', 'Request failed', {
+                method,
+                url: trimmedUrl,
+                key,
+                error: message,
+            });
             setKvStatus('Fehler');
             setKvResponse(message);
         } finally {
