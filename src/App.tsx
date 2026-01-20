@@ -48,6 +48,7 @@ type StoredState = {
     tiles: Record<string, unknown>;
     toiletOccupants: string[];
     toiletBlocked: boolean;
+    toiletUseStatusBackground: boolean;
     roomStatuses: RoomStatus[];
     messages: ChatMessage[];
     notesText: string;
@@ -67,6 +68,7 @@ const initialStoredState: StoredState = {
     tiles: {},
     toiletOccupants: [],
     toiletBlocked: false,
+    toiletUseStatusBackground: false,
     roomStatuses: [],
     messages: [],
     notesText: '',
@@ -93,6 +95,7 @@ function App() {
     const [joinCanCreate, setJoinCanCreate] = useState(false);
     const [toiletOccupants, setToiletOccupants] = useState<string[]>([]);
     const [toiletBlocked, setToiletBlocked] = useState(false);
+    const [toiletUseStatusBackground, setToiletUseStatusBackground] = useState(false);
     const [roomStatuses, setRoomStatuses] = useState<RoomStatus[]>([]);
     const [examEnd, setExamEnd] = useState<Date | null>(null);
     const [examWarningMinutes, setExamWarningMinutes] = useState(5);
@@ -281,6 +284,7 @@ function App() {
             tiles,
             toiletOccupants,
             toiletBlocked,
+            toiletUseStatusBackground,
             roomStatuses,
             messages,
             notesText,
@@ -299,6 +303,7 @@ function App() {
             tiles,
             toiletOccupants,
             toiletBlocked,
+            toiletUseStatusBackground,
             roomStatuses,
             messages,
             notesText,
@@ -323,6 +328,7 @@ function App() {
         setTiles(next.tiles ?? {});
         setToiletOccupants(Array.isArray(next.toiletOccupants) ? next.toiletOccupants : []);
         setToiletBlocked(Boolean(next.toiletBlocked));
+        setToiletUseStatusBackground(Boolean(next.toiletUseStatusBackground));
         setRoomStatuses(Array.isArray(next.roomStatuses) ? next.roomStatuses : []);
         setMessages(Array.isArray(next.messages) ? next.messages : []);
         setNotesText(next.notesText ?? '');
@@ -1726,6 +1732,7 @@ function App() {
                         title="Toilette"
                         occupants={toiletOccupants}
                         isBlocked={toiletBlocked}
+                        useStatusBackground={toiletUseStatusBackground}
                         onToggleBlocked={(next) => {
                             updateSharedState((prev) => ({
                                 ...prev,
@@ -1734,6 +1741,16 @@ function App() {
                             addProtocolEntry(
                                 'Debug',
                                 `Status gesendet: toilet-blocked (${next ? 'gesperrt' : 'frei'})`,
+                            );
+                        }}
+                        onToggleUseStatusBackground={(next) => {
+                            updateSharedState((prev) => ({
+                                ...prev,
+                                toiletUseStatusBackground: next,
+                            }));
+                            addProtocolEntry(
+                                'Debug',
+                                `Status gesendet: toilet-background (${next ? 'an' : 'aus'})`,
                             );
                         }}
                         onOccupy={(name) => {

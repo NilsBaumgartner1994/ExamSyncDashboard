@@ -10,7 +10,9 @@ interface ToiletTileProps {
     title: string;
     occupants: string[];
     isBlocked: boolean;
+    useStatusBackground: boolean;
     onToggleBlocked: (next: boolean) => void;
+    onToggleUseStatusBackground: (next: boolean) => void;
     onOccupy: (name: string) => void;
     onRelease: (name: string) => void;
     defaultSpan?: number;
@@ -22,7 +24,9 @@ export function ToiletTile({
     title,
     occupants,
     isBlocked,
+    useStatusBackground,
     onToggleBlocked,
+    onToggleUseStatusBackground,
     onOccupy,
     onRelease,
     defaultSpan = 2,
@@ -38,6 +42,15 @@ export function ToiletTile({
     const minFontScale = 0.8;
     const fontScaleStep = 0.1;
     const iconSize = 48 * examFontScale;
+    const showStatusBackground = useStatusBackground;
+    const isUnavailable = isBlocked || isOccupied;
+    const examBackgroundColor = showStatusBackground
+        ? isUnavailable
+            ? '#fa5252'
+            : '#40c057'
+        : undefined;
+    const examTextColor = showStatusBackground ? '#fff' : undefined;
+    const lineColor = showStatusBackground ? '#fff' : '#fa5252';
 
     const handleOccupy = () => {
         const trimmed = nameInput.trim();
@@ -91,11 +104,18 @@ export function ToiletTile({
             )}
         >
             {viewMode === 'exam' ? (
-                <Center>
+                <Center
+                    w="100%"
+                    style={showStatusBackground ? { backgroundColor: examBackgroundColor, borderRadius: 12, padding: '24px 16px' } : undefined}
+                >
                     <Stack align="center" gap="xs" w="100%">
                         <div style={{ position: 'relative', width: iconSize + 8, height: iconSize + 8 }}>
-                            <IconToiletPaper size={iconSize} style={{ position: 'absolute', inset: 4 }} />
-                            {(isBlocked || isOccupied) && (
+                            <IconToiletPaper
+                                size={iconSize}
+                                color={examTextColor}
+                                style={{ position: 'absolute', inset: 4 }}
+                            />
+                            {isUnavailable && (
                                 <div
                                     style={{
                                         position: 'absolute',
@@ -103,7 +123,7 @@ export function ToiletTile({
                                         left: '-10%',
                                         width: '120%',
                                         height: 4,
-                                        backgroundColor: '#fa5252',
+                                        backgroundColor: lineColor,
                                         transform: 'rotate(-45deg)',
                                         transformOrigin: 'center',
                                     }}
@@ -117,14 +137,14 @@ export function ToiletTile({
                                         left: '-10%',
                                         width: '120%',
                                         height: 4,
-                                        backgroundColor: '#fa5252',
+                                        backgroundColor: lineColor,
                                         transform: 'rotate(45deg)',
                                         transformOrigin: 'center',
                                     }}
                                 />
                             )}
                         </div>
-                        <Text fw={600} style={{ fontSize: `${1.1 * examFontScale}em` }}>
+                        <Text fw={600} c={examTextColor} style={{ fontSize: `${1.1 * examFontScale}em` }}>
                             {examStatusLabel}
                         </Text>
                     </Stack>
@@ -168,6 +188,11 @@ export function ToiletTile({
                         label="Toilettengang nicht möglich"
                         checked={isBlocked}
                         onChange={(event) => onToggleBlocked(event.currentTarget.checked)}
+                    />
+                    <Checkbox
+                        label="Verwende Hintergrundfarbe zum Anzeigen"
+                        checked={useStatusBackground}
+                        onChange={(event) => onToggleUseStatusBackground(event.currentTarget.checked)}
                     />
                 </Stack>
             )}
