@@ -130,6 +130,8 @@ function App() {
     const [nextPollAt, setNextPollAt] = useState<Date | null>(null);
     const [nextPollInSeconds, setNextPollInSeconds] = useState<number | null>(null);
     const [showDebugProtocol, setShowDebugProtocol] = useState(false);
+    const [exportNotes, setExportNotes] = useState(true);
+    const [exportAnnouncements, setExportAnnouncements] = useState(true);
     const defaultKvWorkerUrl = (() => {
         const envUrl = (import.meta.env.VITE_KV_WORKER_URL as string | undefined)?.trim();
         if (envUrl) return envUrl;
@@ -191,7 +193,25 @@ function App() {
     }, []);
 
     const exportProtocol = () => {
-        const content = protocolEntries.length > 0 ? protocolEntries.join('\n') : 'Keine Einträge vorhanden.';
+        const sections: string[] = [];
+        const protocolContent =
+            protocolEntries.length > 0 ? protocolEntries.join('\n') : 'Keine Einträge vorhanden.';
+
+        sections.push(`Protokoll:\n${protocolContent}`);
+
+        if (exportNotes) {
+            const notesContent = notesText.trim() ? notesText.trim() : 'Keine Notizen vorhanden.';
+            sections.push(`Interne Notizen:\n${notesContent}`);
+        }
+
+        if (exportAnnouncements) {
+            const announcementContent = announcementText.trim()
+                ? announcementText.trim()
+                : 'Keine Ankündigung vorhanden.';
+            sections.push(`Ankündigungen:\n${announcementContent}`);
+        }
+
+        const content = sections.join('\n\n');
         const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
@@ -1910,6 +1930,10 @@ function App() {
                         onExport={exportProtocol}
                         showDebug={showDebugProtocol}
                         onToggleDebug={setShowDebugProtocol}
+                        exportNotes={exportNotes}
+                        onToggleExportNotes={setExportNotes}
+                        exportAnnouncements={exportAnnouncements}
+                        onToggleExportAnnouncements={setExportAnnouncements}
                         onClose={() => hideTile('protocol')}
                     />
                 )}
