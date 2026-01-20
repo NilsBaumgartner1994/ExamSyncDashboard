@@ -1541,58 +1541,64 @@ function App() {
             <Container size="xs" mt="xl">
                 <Title order={2} mb="md">Prüfungsaufsichts-Dashboard</Title>
                 <Stack>
-                    <Divider my="sm" label="Raum beitreten" labelPosition="center" />
+                    {!useLocalStateSync && (
+                        <>
+                            <Divider my="sm" label="Raum beitreten" labelPosition="center" />
 
-                    <TextInput
-                        placeholder="Raum-ID eingeben (a-z, A-Z, 0-9)"
-                        value={roomIdInput}
-                        onChange={(e) => {
-                            setRoomIdInput(normalizeRoomCode(e.currentTarget.value));
-                            if (joinCanCreate) {
-                                setJoinCanCreate(false);
-                            }
-                        }}
-                        maxLength={ROOM_ID_MAX_LENGTH}
-                    />
-                    <Group grow>
-                        <Button onClick={() => handleJoin(roomIdInput)}>Beitreten</Button>
-                        <Button variant="light" onClick={() => setScanOpened(true)}>
-                            QR-Code scannen
-                        </Button>
-                    </Group>
-                    {joinError && (
-                        <Text size="sm" c="red">
-                            {joinError}
-                        </Text>
-                    )}
-                    {joinCanCreate && (
-                        <Button
-                            variant="light"
-                            onClick={() => createRoomWithId(roomIdInput)}
-                        >
-                            Raum erstellen mit eingegebener Raum-ID
-                        </Button>
-                    )}
-                    <Divider my="sm" label="Zuletzt verbunden mit" labelPosition="center" />
-                    {lastConnectedRoom ? (
-                        <Stack gap="xs">
-                            <Button variant="outline" onClick={() => handleJoin(lastConnectedRoom)}>
-                                {formatRoomIdForDisplay(lastConnectedRoom)}
-                            </Button>
-                        </Stack>
-                    ) : (
-                        <Text size="sm" c="dimmed">
-                            Kein zuletzt verbundener Raum gespeichert.
-                        </Text>
+                            <TextInput
+                                placeholder="Raum-ID eingeben (a-z, A-Z, 0-9)"
+                                value={roomIdInput}
+                                onChange={(e) => {
+                                    setRoomIdInput(normalizeRoomCode(e.currentTarget.value));
+                                    if (joinCanCreate) {
+                                        setJoinCanCreate(false);
+                                    }
+                                }}
+                                maxLength={ROOM_ID_MAX_LENGTH}
+                            />
+                            <Group grow>
+                                <Button onClick={() => handleJoin(roomIdInput)}>Beitreten</Button>
+                                <Button variant="light" onClick={() => setScanOpened(true)}>
+                                    QR-Code scannen
+                                </Button>
+                            </Group>
+                            {joinError && (
+                                <Text size="sm" c="red">
+                                    {joinError}
+                                </Text>
+                            )}
+                            {joinCanCreate && (
+                                <Button
+                                    variant="light"
+                                    onClick={() => createRoomWithId(roomIdInput)}
+                                >
+                                    Raum erstellen mit eingegebener Raum-ID
+                                </Button>
+                            )}
+                            <Divider my="sm" label="Zuletzt verbunden mit" labelPosition="center" />
+                            {lastConnectedRoom ? (
+                                <Stack gap="xs">
+                                    <Button variant="outline" onClick={() => handleJoin(lastConnectedRoom)}>
+                                        {formatRoomIdForDisplay(lastConnectedRoom)}
+                                    </Button>
+                                </Stack>
+                            ) : (
+                                <Text size="sm" c="dimmed">
+                                    Kein zuletzt verbundener Raum gespeichert.
+                                </Text>
+                            )}
+                        </>
                     )}
                     <Divider my="sm" label="Oder neuen Link erstellen" labelPosition="center" />
-                    <Button onClick={() => handleJoin()}>Eigenen Link erstellen</Button>
+                    <Button onClick={() => handleJoin()}>
+                        {useLocalStateSync ? 'offline Raum erstellen' : 'Eigenen Link erstellen'}
+                    </Button>
                     <Text size="xs" c="dimmed">
                         {createRoomDebug}
                     </Text>
                     <Divider my="sm" label="Lokales Debugging" labelPosition="center" />
                     <Checkbox
-                        label="Nur lokal speichern (keine KV Requests)"
+                        label="offline Modus"
                         checked={useLocalStateSync}
                         onChange={(event) => setUseLocalStateSync(event.currentTarget.checked)}
                     />
