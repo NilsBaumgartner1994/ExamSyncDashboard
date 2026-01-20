@@ -1630,7 +1630,7 @@ function App() {
                     </Text>
                     <Divider my="sm" label="Lokales Debugging" labelPosition="center" />
                     <Checkbox
-                        label="offline Modus"
+                        label="Offline Modus"
                         checked={useLocalStateSync}
                         onChange={(event) => setUseLocalStateSync(event.currentTarget.checked)}
                     />
