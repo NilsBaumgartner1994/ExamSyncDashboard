@@ -1,5 +1,5 @@
 // src/components/ToiletTile.tsx
-import React, { Fragment, useMemo, useState } from 'react';
+import React, { Fragment, useState } from 'react';
 import { ActionIcon, Button, Center, Checkbox, Divider, Group, Stack, Text, TextInput } from '@mantine/core';
 import { IconEye, IconToiletPaper, IconZoomIn, IconZoomOut } from '@tabler/icons-react';
 import { TileWrapper } from './TileWrapper';
@@ -34,18 +34,10 @@ export function ToiletTile({
     const [examFontScale, setExamFontScale] = useState(1);
     const isOccupied = occupants.length > 0;
     const statusLabel = isOccupied ? `Besetzt (${occupants.length})` : 'Frei';
-    const examStatusLabel = isBlocked ? 'nicht möglich' : statusLabel;
+    const examStatusLabel = isBlocked ? 'Nicht möglich' : statusLabel;
     const minFontScale = 0.8;
     const fontScaleStep = 0.1;
     const iconSize = 48 * examFontScale;
-
-    const examCardStyle = useMemo(() => {
-        if (viewMode !== 'exam' || isBlocked) return undefined;
-        return {
-            backgroundColor: isOccupied ? '#f03e3e' : '#2f9e44',
-            color: '#fff',
-        };
-    }, [isBlocked, isOccupied, viewMode]);
 
     const handleOccupy = () => {
         const trimmed = nameInput.trim();
@@ -66,7 +58,6 @@ export function ToiletTile({
             title={title}
             defaultSpan={defaultSpan}
             onSpanChange={onSpanChange}
-            cardStyle={examCardStyle}
             onClose={onClose}
             headerActions={(
                 <ActionIcon
@@ -83,7 +74,7 @@ export function ToiletTile({
                     <Stack align="center" gap="xs" w="100%">
                         <div style={{ position: 'relative', width: iconSize + 8, height: iconSize + 8 }}>
                             <IconToiletPaper size={iconSize} style={{ position: 'absolute', inset: 4 }} />
-                            {isBlocked && (
+                            {(isBlocked || isOccupied) && (
                                 <div
                                     style={{
                                         position: 'absolute',
@@ -93,6 +84,20 @@ export function ToiletTile({
                                         height: 4,
                                         backgroundColor: '#fa5252',
                                         transform: 'rotate(-45deg)',
+                                        transformOrigin: 'center',
+                                    }}
+                                />
+                            )}
+                            {isBlocked && (
+                                <div
+                                    style={{
+                                        position: 'absolute',
+                                        top: '50%',
+                                        left: '-10%',
+                                        width: '120%',
+                                        height: 4,
+                                        backgroundColor: '#fa5252',
+                                        transform: 'rotate(45deg)',
                                         transformOrigin: 'center',
                                     }}
                                 />
