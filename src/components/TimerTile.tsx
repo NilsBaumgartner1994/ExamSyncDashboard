@@ -1,6 +1,6 @@
 // src/components/TimerTile.tsx
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActionIcon, Button, Center, Group, Stack, Text, TextInput } from '@mantine/core';
+import { ActionIcon, Button, Center, Checkbox, Group, Stack, Text, TextInput } from '@mantine/core';
 import { IconEye, IconZoomIn, IconZoomOut } from '@tabler/icons-react';
 import { TileWrapper } from './TileWrapper';
 
@@ -10,6 +10,10 @@ interface TimerTileProps {
     onSetMinutes: (minutes: number) => void;
     warningMinutes: number;
     onSetWarningMinutes: (minutes: number) => void;
+    showSecondsNormal: boolean;
+    showSecondsWarning: boolean;
+    onSetShowSecondsNormal: (value: boolean) => void;
+    onSetShowSecondsWarning: (value: boolean) => void;
     defaultSpan?: number;
     onSpanChange?: (span: number) => void;
     onClose?: () => void;
@@ -21,6 +25,10 @@ export function TimerTile({
                               onSetMinutes,
                               warningMinutes,
                               onSetWarningMinutes,
+                              showSecondsNormal,
+                              showSecondsWarning,
+                              onSetShowSecondsNormal,
+                              onSetShowSecondsWarning,
                               defaultSpan = 2,
                               onSpanChange,
                               onClose,
@@ -47,14 +55,17 @@ export function TimerTile({
             const diff = Math.max(0, endTime.getTime() - Date.now());
             const minutes = Math.floor(diff / 60000);
             const seconds = Math.floor((diff % 60000) / 1000);
+            const isWarning = warningMinutes > 0 && diff <= warningThresholdMs;
             const showSeconds = viewMode === 'admin'
-                || diff < 60000
-                || (warningMinutes > 0 && diff <= warningThresholdMs);
-            setRemaining(showSeconds ? `${minutes}:${seconds.toString().padStart(2, '0')} min` : `${minutes} min`);
+                || (isWarning ? showSecondsWarning : showSecondsNormal);
+            const paddedMinutes = minutes.toString().padStart(2, '0');
+            setRemaining(showSeconds
+                ? `${paddedMinutes}m ${seconds.toString().padStart(2, '0')}s`
+                : `${paddedMinutes}m`);
             setRemainingMs(diff);
         }, 1000);
         return () => clearInterval(interval);
-    }, [endTime, viewMode, warningMinutes, warningThresholdMs]);
+    }, [endTime, showSecondsNormal, showSecondsWarning, viewMode, warningMinutes, warningThresholdMs]);
 
     useEffect(() => {
         setWarningInput(`${warningMinutes}`);
@@ -136,7 +147,15 @@ export function TimerTile({
                 <Center>
                     <Stack align="center" gap="xs" w="100%">
                         <Text size="sm" c="dimmed">Restzeit</Text>
-                        <Text size="xl" fw={600} style={{ fontSize: `${2 * examFontScale}em` }}>
+                        <Text
+                            size="xl"
+                            fw={600}
+                            style={{
+                                fontSize: `${2 * examFontScale}em`,
+                                fontFamily: 'ui-monospace, SFMono-Regular, SFMono, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                                fontVariantNumeric: 'tabular-nums',
+                            }}
+                        >
                             {remaining}
                         </Text>
                     </Stack>
@@ -182,6 +201,18 @@ export function TimerTile({
                         />
                         <Button onClick={handleWarningSet}>Warnung speichern</Button>
                     </Group>
+                    <Stack gap="xs">
+                        <Checkbox
+                            label="Sekunden bei normal anzeigen"
+                            checked={showSecondsNormal}
+                            onChange={(event) => onSetShowSecondsNormal(event.currentTarget.checked)}
+                        />
+                        <Checkbox
+                            label="Sekunden bei Warnung anzeigen"
+                            checked={showSecondsWarning}
+                            onChange={(event) => onSetShowSecondsWarning(event.currentTarget.checked)}
+                        />
+                    </Stack>
                 </Stack>
             )}
         </TileWrapper>
