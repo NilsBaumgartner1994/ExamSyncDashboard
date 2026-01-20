@@ -43,6 +43,8 @@ type StoredState = {
     version: number;
     examEnd: string | null;
     examWarningMinutes: number;
+    showSecondsNormal: boolean;
+    showSecondsWarning: boolean;
     tiles: Record<string, unknown>;
     toiletOccupants: string[];
     toiletBlocked: boolean;
@@ -60,6 +62,8 @@ const initialStoredState: StoredState = {
     version: 0,
     examEnd: null,
     examWarningMinutes: 5,
+    showSecondsNormal: false,
+    showSecondsWarning: true,
     tiles: {},
     toiletOccupants: [],
     toiletBlocked: false,
@@ -92,6 +96,8 @@ function App() {
     const [roomStatuses, setRoomStatuses] = useState<RoomStatus[]>([]);
     const [examEnd, setExamEnd] = useState<Date | null>(null);
     const [examWarningMinutes, setExamWarningMinutes] = useState(5);
+    const [showSecondsNormal, setShowSecondsNormal] = useState(false);
+    const [showSecondsWarning, setShowSecondsWarning] = useState(true);
     const [tiles, setTiles] = useState<Record<string, unknown>>({});
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [protocolEntries, setProtocolEntries] = useState<string[]>([]);
@@ -250,6 +256,8 @@ function App() {
             version: stateVersion,
             examEnd: examEnd ? examEnd.toISOString() : null,
             examWarningMinutes,
+            showSecondsNormal,
+            showSecondsWarning,
             tiles,
             toiletOccupants,
             toiletBlocked,
@@ -266,6 +274,8 @@ function App() {
             stateVersion,
             examEnd,
             examWarningMinutes,
+            showSecondsNormal,
+            showSecondsWarning,
             tiles,
             toiletOccupants,
             toiletBlocked,
@@ -288,6 +298,8 @@ function App() {
         setStateVersion(next.version);
         setExamEnd(next.examEnd ? new Date(next.examEnd) : null);
         setExamWarningMinutes(next.examWarningMinutes ?? initialStoredState.examWarningMinutes);
+        setShowSecondsNormal(next.showSecondsNormal ?? initialStoredState.showSecondsNormal);
+        setShowSecondsWarning(next.showSecondsWarning ?? initialStoredState.showSecondsWarning);
         setTiles(next.tiles ?? {});
         setToiletOccupants(Array.isArray(next.toiletOccupants) ? next.toiletOccupants : []);
         setToiletBlocked(Boolean(next.toiletBlocked));
@@ -1829,6 +1841,22 @@ function App() {
                                 examWarningMinutes: min,
                             }));
                             addProtocolEntry('Klausurzeit', `Warnung gesetzt auf ${min} min`);
+                        }}
+                        showSecondsNormal={showSecondsNormal}
+                        showSecondsWarning={showSecondsWarning}
+                        onSetShowSecondsNormal={(value) => {
+                            updateSharedState((prev) => ({
+                                ...prev,
+                                showSecondsNormal: value,
+                            }));
+                            addProtocolEntry('Klausurzeit', `Sekunden normal: ${value ? 'an' : 'aus'}`);
+                        }}
+                        onSetShowSecondsWarning={(value) => {
+                            updateSharedState((prev) => ({
+                                ...prev,
+                                showSecondsWarning: value,
+                            }));
+                            addProtocolEntry('Klausurzeit', `Sekunden Warnung: ${value ? 'an' : 'aus'}`);
                         }}
                         onClose={() => hideTile('timer')}
                     />
