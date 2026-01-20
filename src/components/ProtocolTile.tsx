@@ -9,6 +9,10 @@ interface ProtocolTileProps {
     onExport: () => void;
     showDebug: boolean;
     onToggleDebug: (next: boolean) => void;
+    exportNotes: boolean;
+    onToggleExportNotes: (next: boolean) => void;
+    exportAnnouncements: boolean;
+    onToggleExportAnnouncements: (next: boolean) => void;
     defaultSpan?: number;
     onSpanChange?: (span: number) => void;
     onClose?: () => void;
@@ -20,6 +24,10 @@ export function ProtocolTile({
     onExport,
     showDebug,
     onToggleDebug,
+    exportNotes,
+    onToggleExportNotes,
+    exportAnnouncements,
+    onToggleExportAnnouncements,
     defaultSpan = 3,
     onSpanChange,
     onClose,
@@ -36,6 +44,16 @@ export function ProtocolTile({
                     label="Debug-Protokoll anzeigen"
                     checked={showDebug}
                     onChange={(event) => onToggleDebug(event.currentTarget.checked)}
+                />
+                <Checkbox
+                    label="Interne Notizen exportieren"
+                    checked={exportNotes}
+                    onChange={(event) => onToggleExportNotes(event.currentTarget.checked)}
+                />
+                <Checkbox
+                    label="Ankündigungen exportieren"
+                    checked={exportAnnouncements}
+                    onChange={(event) => onToggleExportAnnouncements(event.currentTarget.checked)}
                 />
                 <ScrollArea h={150}>
                     {entries.length > 0 ? (
