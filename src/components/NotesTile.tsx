@@ -125,12 +125,33 @@ export function NotesTile({
         });
     };
 
+    const examFontControls = viewMode === 'exam' ? (
+        <>
+            <ActionIcon
+                variant="light"
+                onClick={() => updateExamFontScale(-fontScaleStep)}
+                aria-label="Schrift verkleinern"
+                disabled={examFontScale <= minFontScale}
+            >
+                <IconZoomOut size={16} />
+            </ActionIcon>
+            <ActionIcon
+                variant="light"
+                onClick={() => updateExamFontScale(fontScaleStep)}
+                aria-label="Schrift vergrößern"
+            >
+                <IconZoomIn size={16} />
+            </ActionIcon>
+        </>
+    ) : null;
+
     return (
         <TileWrapper
             title={title}
             defaultSpan={defaultSpan}
             onSpanChange={onSpanChange}
             headerActions={headerActions}
+            secondaryHeaderActions={examFontControls}
             onClose={onClose}
         >
             {viewMode === 'exam' ? (
@@ -138,23 +159,6 @@ export function NotesTile({
                     <Text size="sm" style={{ whiteSpace: 'pre-line', fontSize: `${1 * examFontScale}em` }}>
                         {text.trim() ? text : 'Keine Notizen vorhanden.'}
                     </Text>
-                    <Group gap={6} justify="flex-end" w="100%">
-                        <ActionIcon
-                            variant="light"
-                            onClick={() => updateExamFontScale(-fontScaleStep)}
-                            aria-label="Schrift verkleinern"
-                            disabled={examFontScale <= minFontScale}
-                        >
-                            <IconZoomOut size={16} />
-                        </ActionIcon>
-                        <ActionIcon
-                            variant="light"
-                            onClick={() => updateExamFontScale(fontScaleStep)}
-                            aria-label="Schrift vergrößern"
-                        >
-                            <IconZoomIn size={16} />
-                        </ActionIcon>
-                    </Group>
                 </Stack>
             ) : (
                 <Stack>

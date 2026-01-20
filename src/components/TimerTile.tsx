@@ -94,6 +94,26 @@ export function TimerTile({
         return undefined;
     }, [remainingMs, viewMode, warningMinutes, warningThresholdMs]);
 
+    const examFontControls = viewMode === 'exam' ? (
+        <>
+            <ActionIcon
+                variant="light"
+                onClick={() => updateExamFontScale(-fontScaleStep)}
+                aria-label="Schrift verkleinern"
+                disabled={examFontScale <= minFontScale}
+            >
+                <IconZoomOut size={16} />
+            </ActionIcon>
+            <ActionIcon
+                variant="light"
+                onClick={() => updateExamFontScale(fontScaleStep)}
+                aria-label="Schrift vergrößern"
+            >
+                <IconZoomIn size={16} />
+            </ActionIcon>
+        </>
+    ) : null;
+
     return (
         <TileWrapper
             title={title}
@@ -101,6 +121,7 @@ export function TimerTile({
             onSpanChange={onSpanChange}
             onClose={onClose}
             cardStyle={examCardStyle}
+            secondaryHeaderActions={examFontControls}
             headerActions={(
                 <ActionIcon
                     onClick={() => setViewMode((prev) => (prev === 'admin' ? 'exam' : 'admin'))}
@@ -118,23 +139,6 @@ export function TimerTile({
                         <Text size="xl" fw={600} style={{ fontSize: `${2 * examFontScale}em` }}>
                             {remaining}
                         </Text>
-                        <Group gap={6} justify="flex-end" w="100%">
-                            <ActionIcon
-                                variant="light"
-                                onClick={() => updateExamFontScale(-fontScaleStep)}
-                                aria-label="Schrift verkleinern"
-                                disabled={examFontScale <= minFontScale}
-                            >
-                                <IconZoomOut size={16} />
-                            </ActionIcon>
-                            <ActionIcon
-                                variant="light"
-                                onClick={() => updateExamFontScale(fontScaleStep)}
-                                aria-label="Schrift vergrößern"
-                            >
-                                <IconZoomIn size={16} />
-                            </ActionIcon>
-                        </Group>
                     </Stack>
                 </Center>
             ) : (

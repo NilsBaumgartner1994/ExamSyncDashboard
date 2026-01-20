@@ -53,12 +53,33 @@ export function ToiletTile({
         });
     };
 
+    const examFontControls = viewMode === 'exam' ? (
+        <>
+            <ActionIcon
+                variant="light"
+                onClick={() => updateExamFontScale(-fontScaleStep)}
+                aria-label="Schrift verkleinern"
+                disabled={examFontScale <= minFontScale}
+            >
+                <IconZoomOut size={16} />
+            </ActionIcon>
+            <ActionIcon
+                variant="light"
+                onClick={() => updateExamFontScale(fontScaleStep)}
+                aria-label="Schrift vergrößern"
+            >
+                <IconZoomIn size={16} />
+            </ActionIcon>
+        </>
+    ) : null;
+
     return (
         <TileWrapper
             title={title}
             defaultSpan={defaultSpan}
             onSpanChange={onSpanChange}
             onClose={onClose}
+            secondaryHeaderActions={examFontControls}
             headerActions={(
                 <ActionIcon
                     onClick={() => setViewMode((prev) => (prev === 'admin' ? 'exam' : 'admin'))}
@@ -106,23 +127,6 @@ export function ToiletTile({
                         <Text fw={600} style={{ fontSize: `${1.1 * examFontScale}em` }}>
                             {examStatusLabel}
                         </Text>
-                        <Group gap={6} justify="flex-end" w="100%">
-                            <ActionIcon
-                                variant="light"
-                                onClick={() => updateExamFontScale(-fontScaleStep)}
-                                aria-label="Schrift verkleinern"
-                                disabled={examFontScale <= minFontScale}
-                            >
-                                <IconZoomOut size={16} />
-                            </ActionIcon>
-                            <ActionIcon
-                                variant="light"
-                                onClick={() => updateExamFontScale(fontScaleStep)}
-                                aria-label="Schrift vergrößern"
-                            >
-                                <IconZoomIn size={16} />
-                            </ActionIcon>
-                        </Group>
                     </Stack>
                 </Center>
             ) : (

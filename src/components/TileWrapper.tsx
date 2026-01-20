@@ -1,6 +1,6 @@
 // src/components/TileWrapper.tsx
 import React, { ReactNode, useState } from 'react';
-import { Card, Group, Text, ActionIcon, Collapse, useMantineTheme } from '@mantine/core';
+import { ActionIcon, Card, Collapse, Group, Stack, Text, useMantineTheme } from '@mantine/core';
 import { useMediaQuery } from '@mantine/hooks';
 import { IconMinus, IconPlus, IconChevronDown, IconChevronUp, IconX } from "@tabler/icons-react";
 
@@ -10,6 +10,7 @@ interface TileWrapperProps {
     defaultSpan?: number;
     onSpanChange?: (span: number) => void;
     headerActions?: ReactNode;
+    secondaryHeaderActions?: ReactNode;
     cardStyle?: React.CSSProperties;
     onClose?: () => void;
 }
@@ -20,6 +21,7 @@ export function TileWrapper({
                                 defaultSpan = 4,
                                 onSpanChange,
                                 headerActions,
+                                secondaryHeaderActions,
                                 cardStyle,
                                 onClose,
                             }: TileWrapperProps) {
@@ -41,35 +43,42 @@ export function TileWrapper({
             withBorder
             style={{ gridColumn: `span ${isMobile ? 1 : span}`, ...cardStyle }}
         >
-            <Group justify="space-between" mb="xs">
-                <Text fw={500}>{title}</Text>
-                <Group gap="xs">
-                    {!isMobile && (
-                        <>
-                            <ActionIcon onClick={() => changeSpan(-1)} variant="light">
-                                <IconMinus size={16} />
+            <Stack gap={4} mb="xs">
+                <Group justify="space-between">
+                    <Text fw={500}>{title}</Text>
+                    <Group gap="xs">
+                        {!isMobile && (
+                            <>
+                                <ActionIcon onClick={() => changeSpan(-1)} variant="light">
+                                    <IconMinus size={16} />
+                                </ActionIcon>
+                                <ActionIcon onClick={() => changeSpan(1)} variant="light">
+                                    <IconPlus size={16} />
+                                </ActionIcon>
+                            </>
+                        )}
+                        {headerActions}
+                        {onClose && (
+                            <ActionIcon
+                                onClick={onClose}
+                                variant="light"
+                                color="red"
+                                aria-label="Karte schließen"
+                            >
+                                <IconX size={16} />
                             </ActionIcon>
-                            <ActionIcon onClick={() => changeSpan(1)} variant="light">
-                                <IconPlus size={16} />
-                            </ActionIcon>
-                        </>
-                    )}
-                    {headerActions}
-                    {onClose && (
-                        <ActionIcon
-                            onClick={onClose}
-                            variant="light"
-                            color="red"
-                            aria-label="Karte schließen"
-                        >
-                            <IconX size={16} />
+                        )}
+                        <ActionIcon onClick={() => setCollapsed((c) => !c)} variant="light">
+                            {collapsed ? <IconChevronDown size={16} /> : <IconChevronUp size={16} />}
                         </ActionIcon>
-                    )}
-                    <ActionIcon onClick={() => setCollapsed((c) => !c)} variant="light">
-                        {collapsed ? <IconChevronDown size={16} /> : <IconChevronUp size={16} />}
-                    </ActionIcon>
+                    </Group>
                 </Group>
-            </Group>
+                {secondaryHeaderActions && (
+                    <Group gap="xs" justify="flex-end">
+                        {secondaryHeaderActions}
+                    </Group>
+                )}
+            </Stack>
             <Collapse in={!collapsed}>
                 {children}
             </Collapse>
