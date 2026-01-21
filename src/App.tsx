@@ -364,25 +364,17 @@ function App() {
             return;
         }
         const normalizedKey = key ? normalizeKvKey(key) : '';
-        if (method !== 'GET' && method !== 'DELETE' && !normalizedKey) {
+        if (!normalizedKey) {
             setKvStatus('Fehler');
             setKvResponse('Bitte einen Key angeben.');
             return;
-        }
-        if (method === 'DELETE' && !normalizedKey) {
-            const confirmed = window.confirm('Wirklich alle Keys im KV Store löschen?');
-            if (!confirmed) {
-                return;
-            }
         }
         setKvLoading(true);
         setKvStatus('Wird geladen...');
         setKvResponse('');
         try {
             const baseUrl = normalizeWorkerUrl(trimmedUrl);
-            const endpoint = normalizedKey
-                ? `${baseUrl}/kv/${encodeURIComponent(normalizedKey)}`
-                : `${baseUrl}/kv`;
+            const endpoint = `${baseUrl}/kv/${encodeURIComponent(normalizedKey)}`;
             console.debug('[KV]', 'Request', { method, endpoint, key, hasValue: Boolean(value) });
             const options: RequestInit = {
                 method,
@@ -1488,9 +1480,8 @@ function App() {
                             </Button>
                         </Group>
                         <Text size="sm" c="dimmed">
-                            Dieser Screen sendet Requests an deinen Cloudflare Worker. Der Worker sollte die
-                            Endpunkte <code>/kv</code> (Liste, DELETE alle Keys) sowie <code>/kv/&lt;key&gt;</code>{' '}
-                            (GET/PUT/DELETE) unterstützen.
+                            Dieser Screen sendet Requests an deinen Cloudflare Worker. Der Worker sollte den Endpunkt{' '}
+                            <code>/kv/&lt;key&gt;</code> (GET/PUT/DELETE) unterstützen.
                         </Text>
                         <TextInput
                             label="Worker-URL"
@@ -1543,21 +1534,6 @@ function App() {
                                 onClick={() => performKvRequest('DELETE', kvKey)}
                             >
                                 Löschen
-                            </Button>
-                            <Button
-                                color="red"
-                                variant="light"
-                                loading={kvLoading}
-                                onClick={() => performKvRequest('DELETE')}
-                            >
-                                Alle löschen
-                            </Button>
-                            <Button
-                                variant="light"
-                                loading={kvLoading}
-                                onClick={() => performKvRequest('GET')}
-                            >
-                                Alle Keys
                             </Button>
                         </Group>
                         {kvStatus && (
