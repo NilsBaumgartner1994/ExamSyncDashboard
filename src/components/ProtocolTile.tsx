@@ -1,5 +1,5 @@
 // src/components/ProtocolTile.tsx
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Button, Checkbox, ScrollArea, Stack, Text } from '@mantine/core';
 import { TileWrapper } from './TileWrapper';
 
@@ -32,6 +32,14 @@ export function ProtocolTile({
     onSpanChange,
     onClose,
 }: ProtocolTileProps) {
+    const viewportRef = useRef<HTMLDivElement | null>(null);
+
+    useEffect(() => {
+        if (viewportRef.current) {
+            viewportRef.current.scrollTo({ top: viewportRef.current.scrollHeight });
+        }
+    }, [entries]);
+
     return (
         <TileWrapper
             title={title}
@@ -55,7 +63,7 @@ export function ProtocolTile({
                     checked={exportAnnouncements}
                     onChange={(event) => onToggleExportAnnouncements(event.currentTarget.checked)}
                 />
-                <ScrollArea h={150}>
+                <ScrollArea h={150} viewportRef={viewportRef}>
                     {entries.length > 0 ? (
                         entries.map((entry, index) => (
                             <Text key={`${entry}-${index}`}>{entry}</Text>
