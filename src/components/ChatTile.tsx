@@ -1,5 +1,5 @@
 // src/components/ChatTile.tsx
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Button, ScrollArea, Stack, Text, TextInput } from '@mantine/core';
 import { TileWrapper } from './TileWrapper';
 
@@ -30,6 +30,13 @@ export function ChatTile({
                              onClose,
                          }: ChatTileProps) {
     const [input, setInput] = useState('');
+    const viewportRef = useRef<HTMLDivElement | null>(null);
+
+    useEffect(() => {
+        if (viewportRef.current) {
+            viewportRef.current.scrollTo({ top: viewportRef.current.scrollHeight });
+        }
+    }, [messages]);
 
     const handleSend = () => {
         if (input.trim()) {
@@ -47,7 +54,7 @@ export function ChatTile({
             onClose={onClose}
         >
             <Stack>
-                <ScrollArea h={150}>
+                <ScrollArea h={150} viewportRef={viewportRef}>
                     {messages.map((msg, i) => (
                         <Text key={i}>
                             <strong>{msg.user}:</strong> {msg.text}
