@@ -1,5 +1,5 @@
 // src/components/ProtocolTile.tsx
-import React, { useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { Button, Checkbox, ScrollArea, Stack, Text } from '@mantine/core';
 import { TileWrapper } from './TileWrapper';
 
@@ -34,11 +34,15 @@ export function ProtocolTile({
 }: ProtocolTileProps) {
     const viewportRef = useRef<HTMLDivElement | null>(null);
 
-    useEffect(() => {
+    const scrollToBottom = useCallback(() => {
         if (viewportRef.current) {
             viewportRef.current.scrollTo({ top: viewportRef.current.scrollHeight });
         }
-    }, [entries]);
+    }, []);
+
+    useEffect(() => {
+        requestAnimationFrame(scrollToBottom);
+    }, [entries, scrollToBottom]);
 
     return (
         <TileWrapper
