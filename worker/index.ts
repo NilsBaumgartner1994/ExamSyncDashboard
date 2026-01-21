@@ -43,21 +43,6 @@ export default {
                 return jsonResponse({ error: 'KV binding missing', requestId }, { status: 500 });
             }
 
-            if (path === '/kv' && (request.method === 'GET' || request.method === 'DELETE')) {
-                const keys: string[] = [];
-                let cursor: string | undefined;
-                do {
-                    const list = await env.EXAM_SYNC_KV.list({ cursor });
-                    keys.push(...list.keys.map((key) => key.name));
-                    cursor = list.list_complete ? undefined : list.cursor;
-                } while (cursor);
-                if (request.method === 'GET') {
-                    return jsonResponse({ keys });
-                }
-                await Promise.all(keys.map((key) => env.EXAM_SYNC_KV.delete(key)));
-                return jsonResponse({ deleted: keys.length });
-            }
-
             if (!path.startsWith('/kv/')) {
                 return jsonResponse({ error: 'Not found', requestId }, { status: 404 });
             }
